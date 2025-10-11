@@ -34,7 +34,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
     e.preventDefault(); // 기본 제출 방지
     setIsLoading(true); // 로딩 상태로 전환
     // Supabase 연동 시 여기에 로그인 API 호출
-    // setIsLoading(false); // 로딩 종료
+    setIsLoading(false); // 로딩 종료
   };
 
  /*   회원가입 버튼 클릭 시 실행 이벤트 핸들러
@@ -47,7 +47,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
     e.preventDefault(); // 기본 제출 방지
     setIsLoading(true);  // 로딩 상태로 전환
     // Supabase 연동 시 여기에 회원가입 API 호출
-    // setIsLoading(false); // 로딩 종료
+    setIsLoading(false); // 로딩 종료
   };
 
   return (
@@ -55,7 +55,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">팀 매칭 플랫폼</CardTitle>
+          <CardTitle className="text-2xl">TYT</CardTitle>
           <CardDescription>전남대학교 팀 모집을 위한 플랫폼에 오신 것을 환영합니다</CardDescription>
         </CardHeader>
         <CardContent>
