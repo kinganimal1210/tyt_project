@@ -1,5 +1,10 @@
+<<<<<<< HEAD
 // src/components/LoginPage.tsx
 'use client';
+=======
+// 로그인 & 회원가입 페이지 컴포넌트
+'use client'; // 클라이언트 컴포넌트 선언 (react hooks 사용 가능)
+>>>>>>> b3c59548c5f729bcedbf6cd98ff6822f32875ff4
 
 import { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';

@@ -1,3 +1,4 @@
+// 채팅 시스템 컴포넌트
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
@@ -37,67 +38,7 @@ interface ChatSystemProps {
 }
 
 export default function ChatSystem({ onClose, currentUser, initialChat, onNewMessage }: ChatSystemProps) {
-  const [chats, setChats] = useState<Chat[]>([
-    {
-      id: '1',
-      participant: {
-        name: '이개발',
-        department: '소프트웨어학과',
-        year: 2
-      },
-      lastMessage: '안녕하세요! 프로젝트에 대해 더 자세히 알고 싶습니다.',
-      unreadCount: 2,
-      messages: [
-        {
-          id: '1',
-          text: '안녕하세요! 프로필을 보고 연락드립니다.',
-          sender: '이개발',
-          timestamp: new Date(Date.now() - 3600000),
-          isMe: false
-        },
-        {
-          id: '2',
-          text: '안녕하세요! 반갑습니다.',
-          sender: currentUser.name,
-          timestamp: new Date(Date.now() - 3000000),
-          isMe: true
-        },
-        {
-          id: '3',
-          text: '프로젝트에 대해 더 자세히 알고 싶습니다.',
-          sender: '이개발',
-          timestamp: new Date(Date.now() - 1800000),
-          isMe: false
-        }
-      ]
-    },
-    {
-      id: '2',
-      participant: {
-        name: '박디자인',
-        department: '디자인학과',
-        year: 3
-      },
-      lastMessage: '포트폴리오 확인 부탁드립니다.',
-      unreadCount: 0,
-      messages: [
-        {
-          id: '1',
-          text: '안녕하세요! 디자이너로 참여하고 싶습니다.',
-          sender: '박디자인',
-          timestamp: new Date(Date.now() - 7200000),
-          isMe: false
-        },
-        {
-          id: '2',
-          text: '포트폴리오 확인 부탁드립니다.',
-          sender: '박디자인',
-          timestamp: new Date(Date.now() - 3600000),
-          isMe: false
-        }
-      ]
-    }
-  ]);
+  const [chats, setChats] = useState<Chat[]>([]);
 
   const [activeChat, setActiveChat] = useState<string | null>(chats[0]?.id || null);
   const [newMessage, setNewMessage] = useState('');
@@ -147,32 +88,9 @@ export default function ChatSystem({ onClose, currentUser, initialChat, onNewMes
 
     setNewMessage('');
 
-    // Mock 응답 (실제 환경에서는 실시간 채팅 구현)
-    setTimeout(() => {
-      const mockResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        text: '네, 알겠습니다! 곧 답변드리겠습니다.',
-        sender: chats.find(c => c.id === activeChat)?.participant.name || '',
-        timestamp: new Date(),
-        isMe: false
-      };
-
-      setChats(prev => prev.map(chat => 
-        chat.id === activeChat 
-          ? { 
-              ...chat, 
-              messages: [...chat.messages, mockResponse],
-              lastMessage: mockResponse.text,
-              unreadCount: chat.unreadCount + 1
-            }
-          : chat
-      ));
-      
-      // 새 메시지 알림 트리거
-      if (onNewMessage) {
-        onNewMessage();
-      }
-    }, 1000);
+    if (onNewMessage) {
+      onNewMessage();
+    }
   };
 
   const currentChat = chats.find(chat => chat.id === activeChat);
@@ -180,14 +98,16 @@ export default function ChatSystem({ onClose, currentUser, initialChat, onNewMes
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
       <Card className="w-full max-w-4xl h-[80vh] flex flex-col">
-        <CardHeader className="flex-row items-center justify-between space-y-0 pb-4">
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            채팅
-          </CardTitle>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            <X className="h-4 w-4" />
-          </Button>
+        <CardHeader className="space-y-0 pb-4">
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              채팅
+            </CardTitle>
+            <Button variant="ghost" size="sm" onClick={onClose} className="p-1 hover:bg-muted">
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
         </CardHeader>
         
         <CardContent className="flex-1 flex gap-4 min-h-0">
@@ -308,7 +228,7 @@ export default function ChatSystem({ onClose, currentUser, initialChat, onNewMes
               </>
             ) : (
               <div className="flex-1 flex items-center justify-center text-muted-foreground">
-                채팅을 선택해주세요
+                아직 대화가 없습니다. 목록에서 채팅을 시작해 보세요.
               </div>
             )}
           </div>
