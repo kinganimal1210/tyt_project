@@ -11,6 +11,7 @@ import ProfileForm from '@/components/ProfileForm';
 import ChatSystem from '@/components/ChatSystem';
 import UserProfileModal from '@/components/UserProfileModal';
 import FeedDetailModal from '@/components/FeedDetailModal';
+import AIRecommend from '@/components/AIRecommend';
 
 // 앱에서 사용할 최소 타입 (필요시 세부 타입으로 교체하세요)
 type User = {
@@ -40,6 +41,7 @@ export default function Home() {
 
   // UserProfileModal 등에 줄 전체 프로필 목록(필요시 실제 데이터로 갱신)
   const [profiles] = useState<Profile[]>([]);
+  const [viewMode, setViewMode] = useState<'recruit' | 'ai'>('recruit');
 
   // 로그인 성공 콜백 (LoginPage -> 상위)
   const handleLogin = (u: User) => {
@@ -116,16 +118,20 @@ export default function Home() {
           onCreateProfile={handleCreateProfile}
           onProfileClick={handleProfileClick}
           hasNewMessages={hasNewMessages}
+          onOpenRecruit={() => setViewMode('recruit')}
+          onOpenAIRecommend={() => setViewMode('ai')}
         />
       </header>
 
       <section className="container mx-auto p-4">
-        <Dashboard
-          onChatStart={handleChatStart}
-          onFeedClick={handleFeedClick}
-          // 필요시 대시보드에 외부 profiles를 직접 공급:
-          profiles={profiles}
-        />
+        {viewMode === 'recruit' && (
+          <Dashboard
+            onChatStart={handleChatStart}
+            onFeedClick={handleFeedClick}
+            profiles={profiles}
+          />
+        )}
+        {viewMode === 'ai' && <AIRecommend />}
       </section>
 
       {/* 프로필 상세 모달 */}
@@ -172,7 +178,7 @@ export default function Home() {
           onClose={() => setShowChat(false)}
           currentUser={user}
           initialChat={initialChat}
-          onNewMessage={() => handleNewMessage}
+          onNewMessage={handleNewMessage}
         />
       )}
     </main>

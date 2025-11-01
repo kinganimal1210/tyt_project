@@ -1,3 +1,4 @@
+// 프로필 피드 작성 및 수정 폼 컴포넌트
 'use client';
 
 import { useState } from 'react';
@@ -22,6 +23,10 @@ export default function ProfileForm({ onClose, onSubmit, initialData, isEditing 
   const [skillInput, setSkillInput] = useState('');
   const [projects, setProjects] = useState<string[]>(initialData?.projects || []);
   const [projectInput, setProjectInput] = useState('');
+
+  const [selectedCategory, setSelectedCategory] = useState<string | undefined>(initialData?.category);
+  const [selectedPosition, setSelectedPosition] = useState<string | undefined>(initialData?.position);
+  const [selectedExperience, setSelectedExperience] = useState<string | undefined>(initialData?.experience);
 
   const addSkill = () => {
     if (skillInput.trim() && !skills.includes(skillInput.trim())) {
@@ -48,14 +53,19 @@ export default function ProfileForm({ onClose, onSubmit, initialData, isEditing 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
+
+    if (!selectedCategory || !selectedPosition || !selectedExperience) {
+      // Do not submit if required selects are empty
+      return;
+    }
     
     const profile = {
       id: isEditing ? initialData.id : Date.now().toString(),
       title: formData.get('title'),
       description: formData.get('description'),
-      category: formData.get('category'),
-      position: formData.get('position'),
-      experience: formData.get('experience'),
+      category: selectedCategory,
+      position: selectedPosition,
+      experience: selectedExperience,
       contact: formData.get('contact'),
       skills,
       projects,
@@ -87,8 +97,8 @@ export default function ProfileForm({ onClose, onSubmit, initialData, isEditing 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="category">카테고리</Label>
-                <Select name="category" required defaultValue={initialData?.category}>
-                  <SelectTrigger>
+                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                  <SelectTrigger id="category">
                     <SelectValue placeholder="선택하세요" />
                   </SelectTrigger>
                   <SelectContent>
@@ -98,12 +108,13 @@ export default function ProfileForm({ onClose, onSubmit, initialData, isEditing 
                     <SelectItem value="project">프로젝트</SelectItem>
                   </SelectContent>
                 </Select>
+                <input type="hidden" name="category" value={selectedCategory ?? ''} />
               </div>
               
               <div className="space-y-2">
                 <Label htmlFor="position">희망 포지션</Label>
-                <Select name="position" required defaultValue={initialData?.position}>
-                  <SelectTrigger>
+                <Select value={selectedPosition} onValueChange={setSelectedPosition}>
+                  <SelectTrigger id="position">
                     <SelectValue placeholder="선택하세요" />
                   </SelectTrigger>
                   <SelectContent>
@@ -116,6 +127,7 @@ export default function ProfileForm({ onClose, onSubmit, initialData, isEditing 
                     <SelectItem value="pm">기획/PM</SelectItem>
                   </SelectContent>
                 </Select>
+                <input type="hidden" name="position" value={selectedPosition ?? ''} />
               </div>
             </div>
 
@@ -144,8 +156,8 @@ export default function ProfileForm({ onClose, onSubmit, initialData, isEditing 
 
             <div className="space-y-2">
               <Label htmlFor="experience">경험 수준</Label>
-              <Select name="experience" required defaultValue={initialData?.experience}>
-                <SelectTrigger>
+              <Select value={selectedExperience} onValueChange={setSelectedExperience}>
+                <SelectTrigger id="experience">
                   <SelectValue placeholder="선택하세요" />
                 </SelectTrigger>
                 <SelectContent>
@@ -154,6 +166,7 @@ export default function ProfileForm({ onClose, onSubmit, initialData, isEditing 
                   <SelectItem value="advanced">고급 (3년 이상)</SelectItem>
                 </SelectContent>
               </Select>
+              <input type="hidden" name="experience" value={selectedExperience ?? ''} />
             </div>
 
             <div className="space-y-2">
@@ -225,16 +238,12 @@ export default function ProfileForm({ onClose, onSubmit, initialData, isEditing 
               />
             </div>
 
-            <div className="flex gap-2 pt-4">
+            <div className="flex justify-end gap-2 pt-4">
               <Button 
-                type="submit" 
-                className="flex-1 hover:opacity-90 transition-opacity"
-                style={{ backgroundColor: 'var(--color-success)', borderColor: 'var(--color-success)' }}
+                type="submit"
+                className="bg-green-600 hover:bg-green-700 text-white"
               >
                 {isEditing ? '수정 완료' : '프로필 등록'}
-              </Button>
-              <Button type="button" variant="outline" onClick={onClose}>
-                취소
               </Button>
             </div>
           </form>
