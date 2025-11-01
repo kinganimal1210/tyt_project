@@ -1,5 +1,7 @@
+// 본인 프로필 모달 컴포넌트
 'use client';
 
+import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -7,7 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { User, Mail, Phone, Calendar, MapPin, GraduationCap } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { User, Mail, Phone, Calendar, MapPin, GraduationCap, Pencil, X } from 'lucide-react';
 
 interface User {
   id: string;
@@ -40,6 +44,7 @@ interface UserProfileModalProps {
   profiles: Profile[];
   onClose: () => void;
   onFeedClick: (profile: Profile) => void;
+  onUpdateUser?: (updated: User) => void; // 사용자 정보 수정 콜백 (옵션)
 }
 
 const categoryLabels = {
@@ -65,12 +70,31 @@ const experienceLabels = {
   advanced: '고급'
 };
 
-export default function UserProfileModal({ user, profiles, onClose, onFeedClick }: UserProfileModalProps) {
+export default function UserProfileModal({ user, profiles, onClose, onFeedClick, onUpdateUser }: UserProfileModalProps) {
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [formName, setFormName] = useState(user.name);
+  const [formEmail, setFormEmail] = useState(user.email);
+  const [formDepartment, setFormDepartment] = useState(user.department);
+  const [formYear, setFormYear] = useState<number | ''>(user.year ?? '');
+
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh]">
+      <DialogContent className="max-w-[900px] max-h-[90vh] px-4">
         <DialogHeader>
-          <DialogTitle>프로필</DialogTitle>
+          <div className="flex items-center justify-between pr-8">
+            <DialogTitle>프로필</DialogTitle>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsEditOpen(true)}
+                className="p-1 hover:bg-accent"
+                aria-label="프로필 수정"
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </DialogHeader>
         
         <ScrollArea className="max-h-[calc(90vh-100px)]">
@@ -172,6 +196,88 @@ export default function UserProfileModal({ user, profiles, onClose, onFeedClick 
             </div>
           </div>
         </ScrollArea>
+
+        {/* 사용자 정보 수정 모달 */}
+        <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>내 정보 수정</DialogTitle>
+            </DialogHeader>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const sanitized: User = {
+                  id: user.id,
+                  name: String(formName).trim(),
+                  email: String(formEmail).trim(),
+                  department: String(formDepartment).trim(),
+                  year: Number(formYear) || 1,
+                };
+                if (onUpdateUser) onUpdateUser(sanitized);
+                setIsEditOpen(false);
+              }}
+              className="space-y-4"
+            >
+              <div className="space-y-2">
+                <Label htmlFor="name">이름</Label>
+                <Input
+                  id="name"
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                  placeholder="홍길동"
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="email">이메일</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formEmail}
+                  onChange={(e) => setFormEmail(e.target.value)}
+                  placeholder="you@cnu.ac.kr"
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="department">학과</Label>
+                <Input
+                  id="department"
+                  value={formDepartment}
+                  onChange={(e) => setFormDepartment(e.target.value)}
+                  placeholder="컴퓨터정보통신공학과"
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="year">학년</Label>
+                <Input
+                  id="year"
+                  type="number"
+                  min={1}
+                  max={6}
+                  value={formYear}
+                  onChange={(e) => setFormYear(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="3"
+                  required
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>
+                  닫기
+                </Button>
+                <Button type="submit" className="bg-green-600 hover:bg-green-700">
+                  저장
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
       </DialogContent>
     </Dialog>
   );

@@ -1,4 +1,4 @@
-//src/components/login.tsx
+// 로그인 & 회원가입 페이지 컴포넌트
 'use client'; // 클라이언트 컴포넌트 선언 (react hooks 사용 가능)
 
 import { useState } from 'react'; // 상태 관리를 위한 react hooks

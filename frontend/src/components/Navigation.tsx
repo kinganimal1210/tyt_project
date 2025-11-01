@@ -1,3 +1,4 @@
+// 네이게이션 바 컴포넌트
 'use client';
 
 import { Button } from '@/components/ui/button';
@@ -9,7 +10,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
-import { MessageCircle, User, LogOut, Plus } from 'lucide-react';
+import { MessageCircle, User, LogOut, Plus, Sparkles, Users } from 'lucide-react';
 
 interface NavigationProps {
   user: any;
@@ -18,9 +19,11 @@ interface NavigationProps {
   onCreateProfile: () => void;
   onProfileClick: () => void;
   hasNewMessages?: boolean;
+  onOpenRecruit: () => void;
+  onOpenAIRecommend: () => void;
 }
 
-export default function Navigation({ user, onLogout, onOpenChat, onCreateProfile, onProfileClick, hasNewMessages }: NavigationProps) {
+export default function Navigation({ user, onLogout, onOpenChat, onCreateProfile, onProfileClick, hasNewMessages, onOpenRecruit, onOpenAIRecommend }: NavigationProps) {
   return (
     <nav className="border-b bg-white sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -33,6 +36,24 @@ export default function Navigation({ user, onLogout, onOpenChat, onCreateProfile
           </div>
           
           <div className="flex items-center space-x-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onOpenRecruit}
+              className="flex items-center gap-2"
+            >
+              <Users className="h-4 w-4" />
+              팀원 모집
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onOpenAIRecommend}
+              className="flex items-center gap-2 border-purple-200 hover:bg-purple-50 hover:border-purple-300 transition-colors"
+            >
+              <Sparkles className="h-4 w-4" />
+              AI 추천 모드
+            </Button>
             <Button
               variant="outline"
               size="sm"

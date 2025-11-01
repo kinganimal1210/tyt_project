@@ -20,7 +20,7 @@ export default function RootLayout({
         </header>
         <main className="min-h-[calc(100dvh-4rem)]">{children}</main>
         <footer className="border-t text-xs text-muted-foreground py-4 px-4 text-center">
-          © {new Date().getFullYear()} CAMP @ CNU
+          © {new Date().getFullYear()} TYT @ CNU
         </footer>
       </body>
     </html>
