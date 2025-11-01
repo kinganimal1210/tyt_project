@@ -32,9 +32,26 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
 */
   const handleLogin = (e: React.FormEvent<HTMLFormElement>) => {  
     e.preventDefault(); // 기본 제출 방지
+    if (isLoading) return; // 중복 제출 방지
     setIsLoading(true); // 로딩 상태로 전환
-    // Supabase 연동 시 여기에 로그인 API 호출
-    // setIsLoading(false); // 로딩 종료
+
+    // 폼에서 값 읽기 (이메일/비밀번호)
+    const fd = new FormData(e.currentTarget);
+    const email = (fd.get('email') as string) || '';
+    const nameGuess = email.split('@')[0] || '사용자';
+
+    // 실제 환경이라면 여기서 Supabase Auth 호출
+    // 데모용: 300ms 후 로그인 성공 처리
+    setTimeout(() => {
+      onLogin({
+        id: '1',
+        name: nameGuess,
+        email,
+        department: '컴퓨터정보통신공학과',
+        year: 3,
+      });
+      setIsLoading(false); // 로딩 종료
+    }, 300);
   };
 
  /*   회원가입 버튼 클릭 시 실행 이벤트 핸들러
@@ -45,9 +62,28 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
 */
   const handleSignup = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault(); // 기본 제출 방지
+    if (isLoading) return; // 중복 제출 방지
     setIsLoading(true);  // 로딩 상태로 전환
-    // Supabase 연동 시 여기에 회원가입 API 호출
-    // setIsLoading(false); // 로딩 종료
+
+    const fd = new FormData(e.currentTarget);
+    const name = (fd.get('name') as string) || '신입학생';
+    const email = (fd.get('signup-email') as string) || '';
+    const department = (fd.get('department') as string) || '';
+    const yearRaw = (fd.get('year') as string) || '1';
+    const year = Number.parseInt(yearRaw, 10);
+    
+    // 실제 환경이라면 여기서 Supabase 회원가입 API 호출
+    // 데모용: 300ms 후 회원가입 → 자동 로그인 처리
+    setTimeout(() => {
+      onLogin({
+        id: '2',
+        name,
+        email,
+        department,
+        year: Number.isNaN(year) ? 1 : year,
+      });
+      setIsLoading(false); // 로딩 종료
+    }, 300);
   };
 
   return (
@@ -55,7 +91,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">팀 매칭 플랫폼</CardTitle>
+          <CardTitle className="text-2xl">TYT</CardTitle>
           <CardDescription>전남대학교 팀 모집을 위한 플랫폼에 오신 것을 환영합니다</CardDescription>
         </CardHeader>
         <CardContent>
