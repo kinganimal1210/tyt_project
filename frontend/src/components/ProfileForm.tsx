@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { X } from 'lucide-react';
+import { supabase } from '@/lib/supabaseClient';
 
 interface ProfileFormProps {
   onClose: () => void;
@@ -45,26 +46,54 @@ export default function ProfileForm({ onClose, onSubmit, initialData, isEditing 
     setProjects(projects.filter(p => p !== project));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const formData = new FormData(e.target as HTMLFormElement);
-    
-    const profile = {
-      id: isEditing ? initialData.id : Date.now().toString(),
-      title: formData.get('title'),
-      description: formData.get('description'),
-      category: formData.get('category'),
-      position: formData.get('position'),
-      experience: formData.get('experience'),
-      contact: formData.get('contact'),
-      skills,
-      projects,
-      createdAt: isEditing ? initialData.createdAt : new Date().toISOString()
-    };
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  const formData = new FormData(e.target as HTMLFormElement);
 
+  const profile = {
+    title: formData.get('title') as string,
+    description: formData.get('description') as string,
+    category: formData.get('category') as string,
+    position: formData.get('position') as string,
+    experience: formData.get('experience') as string,
+    contact: formData.get('contact') as string,
+    skills,
+    projects,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  try {
+    // 로그인 사용자 정보 가져오기
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+
+    // Supabase에 저장 (profiles_detail 테이블)
+    const { error } = await supabase.from('profiles_detail').upsert({
+      user_id: user.id,
+      title: profile.title,
+      description: profile.description,
+      skills: profile.skills,
+      interests: { category: profile.category, position: profile.position },
+      experience: { level: profile.experience },
+      contact: profile.contact,
+      created_at: profile.created_at,
+      updated_at: profile.updated_at,
+    }, { onConflict: 'user_id' }); // user_id 중복 시 update
+
+    if (error) throw error;
+
+    alert('프로필이 성공적으로 등록되었습니다!');
     onSubmit(profile);
     onClose();
-  };
+  } catch (err: any) {
+    console.error(err);
+    alert('프로필 저장 중 오류가 발생했습니다: ' + err.message);
+  }
+};
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
