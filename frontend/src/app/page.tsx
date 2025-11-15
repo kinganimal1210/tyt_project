@@ -80,7 +80,7 @@ export default function Home() {
     setIsLoadingProfiles(true);
 
     const { data, error } = await supabase
-      .from('profiles_detail')   // ✅ 상세 프로필 테이블 기준
+      .from('posts')   // ✅ 상세 프로필 테이블 기준
       .select(`
         id,
         user_id,

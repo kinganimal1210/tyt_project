@@ -77,7 +77,7 @@ const handleSubmit = async (e: React.FormEvent) => {
     }
 
     // Supabase에 저장 (profiles_detail 테이블)
-    const { error } = await supabase.from('profiles_detail').upsert({
+    const { error } = await supabase.from('posts').upsert({
       user_id: user.id,
       title: profile.title,
       description: profile.description,
