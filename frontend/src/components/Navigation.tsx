@@ -1,6 +1,8 @@
 // 네이게이션 바 컴포넌트
 'use client';
 
+import { useEffect, useState } from 'react';
+
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { 
@@ -11,6 +13,7 @@ import {
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
 import { MessageCircle, User, LogOut, Plus, Sparkles, Users } from 'lucide-react';
+import { supabase } from '@/lib/supabaseClient';
 
 interface NavigationProps {
   user: any;
@@ -24,6 +27,44 @@ interface NavigationProps {
 }
 
 export default function Navigation({ user, onLogout, onOpenChat, onCreateProfile, onProfileClick, hasNewMessages, onOpenRecruit, onOpenAIRecommend }: NavigationProps) {
+  // 내비게이션에서 표시할 사용자 정보 (DB와 동기화)
+  const [displayUser, setDisplayUser] = useState<any>(user);
+
+  // 부모에서 user prop이 변경되면 표시용 사용자도 동기화
+  useEffect(() => {
+    setDisplayUser(user);
+  }, [user]);
+
+  // Supabase profiles 테이블에서 최신 사용자 정보 가져오기
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (!user?.id) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id, name, email, department, year')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (error) {
+          console.error('네비게이션 사용자 정보 조회 중 오류:', error);
+          return;
+        }
+
+        if (data) {
+          setDisplayUser((prev: any) => ({
+            ...prev,
+            ...data,
+          }));
+        }
+      } catch (err) {
+        console.error('네비게이션 사용자 정보 조회 중 예외 발생:', err);
+      }
+    };
+
+    fetchUserProfile();
+  }, [user?.id]);
   return (
     <nav className="border-b bg-white sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -88,19 +129,19 @@ export default function Navigation({ user, onLogout, onOpenChat, onCreateProfile
                 <Button variant="ghost" className="relative h-8 w-8 rounded-full hover:ring-2 hover:ring-green-200 transition-all">
                   <Avatar className="h-8 w-8">
                     <AvatarFallback className="bg-green-100 text-green-700">
-                      {user?.name?.charAt(0) || 'U'}
+                      {displayUser?.name?.charAt(0) || 'U'}
                     </AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56" align="end" forceMount>
                 <div className="flex flex-col space-y-1 p-2">
-                  <p className="text-sm font-medium leading-none">{user?.name}</p>
+                  <p className="text-sm font-medium leading-none">{displayUser?.name}</p>
                   <p className="text-xs leading-none text-muted-foreground">
-                    {user?.email}
+                    {displayUser?.email}
                   </p>
                   <p className="text-xs leading-none text-muted-foreground">
-                    {user?.department} {user?.year}학년
+                    {displayUser?.department} {displayUser?.year}학년
                   </p>
                 </div>
                 <DropdownMenuSeparator />

@@ -1,6 +1,30 @@
 'use client';
 
 import { useState } from 'react';
+// API 타입 정의
+type ApiRecommendedProfile = {
+  post_id: string;
+  score: number;
+  jaccard_skill: number;
+  jaccard_interest: number;
+  jaccard_role: number;
+  common_skills: string[];
+};
+
+type AiRecommendApiResponse = {
+  userId: string;
+  count: number;
+  recommanded_skills: string[];
+  recommanded_profiles: ApiRecommendedProfile[];
+};
+
+// 화면용 타입 정의
+type ResultItem = {
+  id: string;
+  title: string;
+  skills: string[];
+  score: number;
+};
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -10,45 +34,49 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Sparkles, Filter } from 'lucide-react';
 
-/**
- * 네비게이션 바는 그대로 유지하고,
- * 상위에서 조건부 렌더링으로 본문만 전환해 사용하기 위한 AI 추천 모드 컴포넌트입니다.
- *
- * 사용 예:
- *   {viewMode === 'ai' && <AIRecommend />}
- */
 export default function AIRecommend() {
-  // 입력 상태
-  const [skills, setSkills] = useState('');
-  const [interests, setInterests] = useState('');
-  const [availability, setAvailability] = useState('');
-  const [teamSize, setTeamSize] = useState<number | ''>('');
-  const [note, setNote] = useState('');
+  const [skills, setSkills] = useState('');           // 원하는 기술 / 스택 (쉼표 구분 문자열)
+  const [interests, setInterests] = useState('');     // 관심 분야
+  const [availability, setAvailability] = useState(''); // 가능 시간 / 요일
+  const [teamSize, setTeamSize] = useState<number | ''>(''); // 희망 팀 규모
+  const [note, setNote] = useState('');               // 기타 메모
 
-  // 결과/로딩 상태
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<
-    { id: string; title: string; skills: string[]; score: number }[]
-  >([]);
+  const [results, setResults] = useState<ResultItem[]>([]);
 
-  // 추천 트리거 (추후 서버 액션/Route Handler로 교체)
   const onRecommend = async () => {
     setLoading(true);
+    try {
+      const userId = '21a19753-ab5e-4566-875f-14250873476e'; // 실제 로그인 유저 ID로 교체
+      const res = await fetch(`/api/ai-recommend?userId=${userId}`);
 
-    // TODO: 실제 구현 시 여기를 서버 액션 또는 /api/ai-recommend 로 대체
-    setTimeout(() => {
-      // 더미 결과
-      setResults([
-        { id: 'p1', title: 'FE 개발자(React/TS) 구함', skills: ['React', 'TypeScript', 'Tailwind'], score: 0.92 },
-        { id: 'p2', title: 'AI/백엔드 협업 팀', skills: ['Python', 'FastAPI', 'PostgreSQL'], score: 0.87 },
-      ]);
+      if (!res.ok) {
+        console.error('AI recommend API error:', res.status);
+        setResults([]);
+        return;
+      }
+
+      const data: AiRecommendApiResponse = await res.json();
+
+      const mapped: ResultItem[] = data.recommanded_profiles.map((p, idx) => ({
+        id: p.post_id,
+        title: `추천 팀원 #${idx + 1}`,
+        skills: p.common_skills ?? [],
+        score: p.score,
+      }));
+
+      setResults(mapped);
+    } catch (e) {
+      console.error(e);
+      setResults([]);
+    } finally {
       setLoading(false);
-    }, 600);
+    }
   };
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
-      {/* 헤더 */}
+      {/* 헤더 영역: 아이콘 + 제목 */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold flex items-center gap-2">
           <Sparkles className="h-6 w-6 text-purple-500" />
@@ -56,7 +84,7 @@ export default function AIRecommend() {
         </h1>
       </div>
 
-      {/* 입력 카드 */}
+      {/* ───────────────── 입력 카드 ───────────────── */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -65,7 +93,9 @@ export default function AIRecommend() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* 기본 조건: 기술, 관심 분야, 시간, 팀 규모 */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* 원하는 기술/스택 */}
             <div className="space-y-2">
               <Label htmlFor="skills">원하는 기술/스택</Label>
               <Input
@@ -76,6 +106,7 @@ export default function AIRecommend() {
               />
             </div>
 
+            {/* 관심 분야 */}
             <div className="space-y-2">
               <Label htmlFor="interests">관심 분야</Label>
               <Input
@@ -86,6 +117,7 @@ export default function AIRecommend() {
               />
             </div>
 
+            {/* 가능 시간/요일 */}
             <div className="space-y-2">
               <Label htmlFor="availability">가능 시간/요일</Label>
               <Input
@@ -96,6 +128,7 @@ export default function AIRecommend() {
               />
             </div>
 
+            {/* 희망 팀 규모 */}
             <div className="space-y-2">
               <Label htmlFor="teamSize">희망 팀 규모</Label>
               <Input
@@ -105,11 +138,14 @@ export default function AIRecommend() {
                 max={10}
                 placeholder="예: 4"
                 value={teamSize}
-                onChange={(e) => setTeamSize(e.target.value === '' ? '' : Number(e.target.value))}
+                onChange={(e) =>
+                  setTeamSize(e.target.value === '' ? '' : Number(e.target.value))
+                }
               />
             </div>
           </div>
 
+          {/* 기타 메모 (선택 입력) */}
           <div className="space-y-2">
             <Label htmlFor="note">기타 메모 (선택)</Label>
             <Textarea
@@ -121,6 +157,7 @@ export default function AIRecommend() {
             />
           </div>
 
+          {/* 추천 버튼 */}
           <div className="flex justify-end">
             <Button
               className="bg-purple-600 hover:bg-purple-700"
@@ -134,7 +171,7 @@ export default function AIRecommend() {
         </CardContent>
       </Card>
 
-      {/* 결과 카드 */}
+      {/* ───────────────── 결과 카드 ───────────────── */}
       <Card>
         <CardHeader>
           <CardTitle>추천 결과</CardTitle>
@@ -153,7 +190,9 @@ export default function AIRecommend() {
                 >
                   <div className="flex items-center justify-between">
                     <h3 className="font-medium">{r.title}</h3>
-                    <Badge variant="secondary">{Math.round(r.score * 100)}%</Badge>
+                    <Badge variant="secondary">
+                      {Math.round(r.score * 100)}%
+                    </Badge>
                   </div>
                   <Separator className="my-2" />
                   <div className="flex flex-wrap gap-2">
