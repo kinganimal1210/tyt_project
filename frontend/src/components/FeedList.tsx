@@ -1,29 +1,44 @@
 'use client';
 
 import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { MessageCircle, Search, Filter } from 'lucide-react';
 
+// 런타임에서 undefined가 들어와도 안 터지도록 대부분 optional
 interface Profile {
   id: string;
-  title: string;
-  description: string;
-  category: string;
-  position: string;
-  experience: string;
-  contact: string;
-  skills: string[];
-  projects: string[];
-  createdAt: string;
-  author: {
-    name: string;
-    department: string;
-    year: number;
+  title?: string;
+  description?: string;
+  category?: string;
+  position?: any;      // string 또는 { value, label } 같은 객체까지 허용
+  experience?: any;    // string 또는 { value, label }
+  contact?: string;
+  skills?: string[];
+  projects?: string[];
+  createdAt?: string;
+  created_at?: string; // Supabase 기본 컬럼명 대응
+  author?: {
+    id?: string;
+    name?: string;
+    department?: string;
+    year?: number;
   };
 }
 
@@ -38,7 +53,7 @@ const categoryLabels = {
   club: '동아리',
   capstone: '캡스톤',
   contest: '공모전',
-  project: '프로젝트'
+  project: '프로젝트',
 };
 
 const positionLabels = {
@@ -48,29 +63,122 @@ const positionLabels = {
   mobile: '모바일',
   ai: 'AI/ML',
   design: '디자인',
-  pm: '기획/PM'
+  pm: '기획/PM',
 };
 
 const experienceLabels = {
   beginner: '초급',
   intermediate: '중급',
-  advanced: '고급'
+  advanced: '고급',
 };
 
-export default function FeedList({ profiles, activeCategory, onChatStart, onFeedClick }: FeedListProps) {
+// 공통: 어떤 형태의 값이 와도 사람이 읽을 수 있는 문자열로 바꾸기
+function normalizeEnum(
+  raw: any,
+  labels?: Record<string, string>,
+  fallback = '미지정',
+): string {
+  if (raw === null || raw === undefined) return fallback;
+
+  if (typeof raw === 'string') {
+    if (labels && labels[raw as keyof typeof labels]) {
+      return labels[raw as keyof typeof labels];
+    }
+    return raw;
+  }
+
+  if (Array.isArray(raw)) {
+    const items = raw
+      .map((v) => normalizeEnum(v, labels, ''))
+      .filter((v) => v);
+    return items.length > 0 ? items.join(', ') : fallback;
+  }
+
+  if (typeof raw === 'object') {
+    if ('label' in raw && typeof (raw as any).label === 'string') {
+      return (raw as any).label;
+    }
+    if ('value' in raw && typeof (raw as any).value === 'string') {
+      const v = (raw as any).value;
+      if (labels && labels[v as keyof typeof labels]) {
+        return labels[v as keyof typeof labels];
+      }
+      return v;
+    }
+    const firstStr = Object.values(raw).find(
+      (v) => typeof v === 'string',
+    ) as string | undefined;
+    if (firstStr) return firstStr;
+    return JSON.stringify(raw);
+  }
+
+  return String(raw);
+}
+
+// 필터용: 코드(frontend, beginner 등)를 뽑는 함수
+function getPositionCode(raw: any): string | null {
+  if (!raw) return null;
+  if (typeof raw === 'string') return raw;
+  if (typeof raw === 'object' && raw !== null && 'value' in raw) {
+    return String((raw as any).value);
+  }
+  return null;
+}
+
+function getExperienceCode(raw: any): string | null {
+  if (!raw) return null;
+  if (typeof raw === 'string') return raw;
+  if (typeof raw === 'object' && raw !== null && 'value' in raw) {
+    return String((raw as any).value);
+  }
+  return null;
+}
+
+export default function FeedList({
+  profiles,
+  activeCategory,
+  onChatStart,
+  onFeedClick,
+}: FeedListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [positionFilter, setPositionFilter] = useState('all');
   const [experienceFilter, setExperienceFilter] = useState('all');
 
-  const filteredProfiles = profiles.filter(profile => {
-    const matchesCategory = activeCategory === 'all' || profile.category === activeCategory;
-    const matchesSearch = profile.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         profile.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         profile.skills.some(skill => skill.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesPosition = positionFilter === 'all' || profile.position === positionFilter;
-    const matchesExperience = experienceFilter === 'all' || profile.experience === experienceFilter;
+  // 필터 로직
+  const filteredProfiles = profiles.filter((profile) => {
+    const category = profile.category ?? 'all';
 
-    return matchesCategory && matchesSearch && matchesPosition && matchesExperience;
+    const posCode = getPositionCode(profile.position) ?? 'all';
+    const expCode = getExperienceCode(profile.experience) ?? 'all';
+
+    const matchesCategory =
+      activeCategory === 'all' || category === activeCategory;
+
+    const title = (profile.title ?? '').toLowerCase();
+    const description = (profile.description ?? '').toLowerCase();
+    const skillsArray = Array.isArray(profile.skills) ? profile.skills : [];
+    const search = (searchTerm ?? '').toLowerCase();
+
+    const matchesSearch =
+      !search ||
+      title.includes(search) ||
+      description.includes(search) ||
+      skillsArray.some((skill) =>
+        (skill ?? '').toLowerCase().includes(search),
+      );
+
+    const matchesPosition =
+      positionFilter === 'all' || posCode === positionFilter;
+
+    const matchesExperience =
+      experienceFilter === 'all' || expCode === experienceFilter;
+
+    return (
+      matchesCategory &&
+      matchesSearch &&
+      matchesPosition &&
+      matchesExperience
+    );
   });
 
   return (
@@ -89,7 +197,7 @@ export default function FeedList({ profiles, activeCategory, onChatStart, onFeed
           </div>
           <Filter className="h-4 w-4 text-muted-foreground" />
         </div>
-        
+
         <div className="flex gap-4">
           <Select value={positionFilter} onValueChange={setPositionFilter}>
             <SelectTrigger className="w-40">
@@ -98,11 +206,13 @@ export default function FeedList({ profiles, activeCategory, onChatStart, onFeed
             <SelectContent>
               <SelectItem value="all">모든 포지션</SelectItem>
               {Object.entries(positionLabels).map(([key, label]) => (
-                <SelectItem key={key} value={key}>{label}</SelectItem>
+                <SelectItem key={key} value={key}>
+                  {label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          
+
           <Select value={experienceFilter} onValueChange={setExperienceFilter}>
             <SelectTrigger className="w-40">
               <SelectValue placeholder="경험" />
@@ -110,7 +220,9 @@ export default function FeedList({ profiles, activeCategory, onChatStart, onFeed
             <SelectContent>
               <SelectItem value="all">모든 경험</SelectItem>
               {Object.entries(experienceLabels).map(([key, label]) => (
-                <SelectItem key={key} value={key}>{label}</SelectItem>
+                <SelectItem key={key} value={key}>
+                  {label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -124,106 +236,149 @@ export default function FeedList({ profiles, activeCategory, onChatStart, onFeed
 
       {/* Profile Cards */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {filteredProfiles.map((profile) => (
-          <Card 
-            key={profile.id} 
-            className="hover:shadow-md transition-shadow cursor-pointer"
-            onClick={() => onFeedClick(profile)}
-          >
-            <CardHeader className="pb-3">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-10 w-10">
-                    <AvatarFallback>
-                      {profile.author.name.charAt(0)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <CardTitle className="text-base">{profile.title}</CardTitle>
-                    <CardDescription className="text-xs">
-                      {profile.author.name} • {profile.author.department} {profile.author.year}학년
-                    </CardDescription>
+        {filteredProfiles.map((profile) => {
+          const author = profile.author ?? {
+            name: '이름 없음',
+            department: '',
+            year: 0,
+          };
+
+          const skills = Array.isArray(profile.skills) ? profile.skills : [];
+          const projects = Array.isArray(profile.projects)
+            ? profile.projects
+            : [];
+
+          const createdAtRaw =
+            profile.createdAt ?? profile.created_at ?? new Date().toISOString();
+          const createdAtLabel = new Date(createdAtRaw).toLocaleDateString();
+
+          const categoryKey = profile.category as keyof typeof categoryLabels;
+
+          const positionLabel = normalizeEnum(
+            profile.position,
+            positionLabels,
+            '미지정',
+          );
+          const experienceLabel = normalizeEnum(
+            profile.experience,
+            experienceLabels,
+            '미지정',
+          );
+
+          return (
+            <Card
+              key={profile.id}
+              className="hover:shadow-md transition-shadow cursor-pointer"
+              onClick={() => onFeedClick(profile)}
+            >
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-10 w-10">
+                      <AvatarFallback>
+                        {(author.name ?? 'U').charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <CardTitle className="text-base">
+                        {profile.title ?? '제목 없음'}
+                      </CardTitle>
+                      <CardDescription className="text-xs">
+                        {author.name ?? '이름 없음'} • {author.department ?? ''}{' '}
+                        {author.year ? `${author.year}학년` : ''}
+                      </CardDescription>
+                    </div>
                   </div>
-                </div>
-                <Badge variant="outline" className="text-xs">
-                  {categoryLabels[profile.category as keyof typeof categoryLabels]}
-                </Badge>
-              </div>
-            </CardHeader>
-            
-            <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground line-clamp-3">
-                {profile.description}
-              </p>
-              
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="font-medium">포지션:</span>
-                  <Badge variant="secondary" className="text-xs">
-                    {positionLabels[profile.position as keyof typeof positionLabels]}
-                  </Badge>
-                  <span className="font-medium">경험:</span>
                   <Badge variant="outline" className="text-xs">
-                    {experienceLabels[profile.experience as keyof typeof experienceLabels]}
+                    {categoryKey && categoryLabels[categoryKey]
+                      ? categoryLabels[categoryKey]
+                      : '기타'}
                   </Badge>
                 </div>
-                
-                <div>
-                  <div className="text-xs font-medium mb-1">기술 스택:</div>
-                  <div className="flex flex-wrap gap-1">
-                    {profile.skills.slice(0, 3).map((skill) => (
-                      <Badge key={skill} variant="secondary" className="text-xs">
-                        {skill}
-                      </Badge>
-                    ))}
-                    {profile.skills.length > 3 && (
-                      <Badge variant="outline" className="text-xs">
-                        +{profile.skills.length - 3}
-                      </Badge>
-                    )}
+              </CardHeader>
+
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground line-clamp-3">
+                  {profile.description ?? '설명 없음'}
+                </p>
+
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="font-medium">포지션:</span>
+                    <Badge variant="secondary" className="text-xs">
+                      {positionLabel}
+                    </Badge>
+                    <span className="font-medium">경험:</span>
+                    <Badge variant="outline" className="text-xs">
+                      {experienceLabel}
+                    </Badge>
                   </div>
-                </div>
-                
-                {profile.projects.length > 0 && (
+
+                  {/* 기술 스택 */}
                   <div>
-                    <div className="text-xs font-medium mb-1">프로젝트:</div>
+                    <div className="text-xs font-medium mb-1">기술 스택:</div>
                     <div className="flex flex-wrap gap-1">
-                      {profile.projects.slice(0, 2).map((project) => (
-                        <Badge key={project} variant="outline" className="text-xs">
-                          {project}
+                      {skills.slice(0, 3).map((skill) => (
+                        <Badge
+                          key={skill}
+                          variant="secondary"
+                          className="text-xs"
+                        >
+                          {skill}
                         </Badge>
                       ))}
-                      {profile.projects.length > 2 && (
+                      {skills.length > 3 && (
                         <Badge variant="outline" className="text-xs">
-                          +{profile.projects.length - 2}
+                          +{skills.length - 3}
                         </Badge>
                       )}
                     </div>
                   </div>
-                )}
-              </div>
-              
-              <div className="pt-2">
-                <Button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onChatStart(profile);
-                  }}
-                  className="w-full hover:bg-green-50 transition-colors"
-                  style={{ backgroundColor: 'var(--color-success)', borderColor: 'var(--color-success)' }}
-                  size="sm"
-                >
-                  <MessageCircle className="h-4 w-4 mr-2" />
-                  연락하기
-                </Button>
-              </div>
-              
-              <div className="text-xs text-muted-foreground">
-                {new Date(profile.createdAt).toLocaleDateString()}에 작성됨
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+
+                  {/* 프로젝트 */}
+                  {projects.length > 0 && (
+                    <div>
+                      <div className="text-xs font-medium mb-1">프로젝트:</div>
+                      <div className="flex flex-wrap gap-1">
+                        {projects.map((project) => (
+                          <Badge
+                            key={project}
+                            variant="outline"
+                            className="text-xs"
+                          >
+                            {project}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-2">
+                  <Button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onChatStart(profile);
+                    }}
+                    className="w-full hover:bg-green-50 transition-colors"
+                    style={{
+                      backgroundColor: 'var(--color-success)',
+                      borderColor: 'var(--color-success)',
+                    }}
+                    size="sm"
+                  >
+                    <MessageCircle className="h-4 w-4 mr-2" />
+                    연락하기
+                  </Button>
+                </div>
+
+                <div className="text-xs text-muted-foreground">
+                  {createdAtLabel}에 작성됨
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       {filteredProfiles.length === 0 && (

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabaseClient';
 
 // 변환된 컴포넌트 (모두 default export 기준)
 import LoginPage from '@/components/LoginPage';
@@ -39,7 +40,8 @@ export default function Home() {
   const [initialChat, setInitialChat] = useState<ChatInit | null>(null);
 
   // UserProfileModal 등에 줄 전체 프로필 목록(필요시 실제 데이터로 갱신)
-  const [profiles] = useState<Profile[]>([]);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [isLoadingProfiles, setIsLoadingProfiles] = useState(false);
   const [viewMode, setViewMode] = useState<'recruit' | 'ai'>('recruit');
 
   // 로그인 성공 콜백 (LoginPage -> 상위)
@@ -58,12 +60,87 @@ export default function Home() {
     setInitialChat(null);
   };
 
-  // 채팅 시작 (대시보드/피드/프로필에서 호출)
+  // [수정] 채팅 시작 (DM 전용, target 필수)
   const handleChatStart = (target?: any) => {
-    setInitialChat(target ?? null);
+    if (!target) {
+      alert('채팅할 상대 정보가 없습니다.');
+      return;
+    }
+
+    console.log('[handleChatStart] target =', target);
+    setInitialChat(target);   // ChatSystem에서 author/id를 뽑아서 씀
     setShowChat(true);
     setHasNewMessages(false);
   };
+
+  const fetchProfiles = async () => {
+  if (!user) return;
+
+  try {
+    setIsLoadingProfiles(true);
+
+    const { data, error } = await supabase
+      .from('posts')   // ✅ 상세 프로필 테이블 기준
+      .select(`
+        id,
+        user_id,
+        title,
+        description,
+        skills,
+        interests,
+        available,
+        experience,
+        contact,
+        created_at,
+        profiles (
+          id,
+          name,
+          email,
+          department,
+          year
+        )
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error(
+        '프로필 목록 불러오기 오류:',
+        error.message,
+        error.details,
+        error.hint
+      );
+      return;
+    }
+
+    const rows = data ?? [];
+
+    // 🔧 UI가 기대하는 구조로 맞추기 (profile.author.* 사용 가능하게)
+    const normalized = rows.map((row: any) => ({
+      ...row,
+      author: {
+        id: row.profiles?.id,                    // DM용 uuid
+        name: row.profiles?.name ?? '이름 없음',
+        email: row.profiles?.email ?? '',
+        department: row.profiles?.department ?? '',
+        year: row.profiles?.year ?? undefined,
+      },
+    }));
+
+      setProfiles(normalized);
+    } catch (err: any) {
+      console.error('프로필 목록 예외:', err?.message ?? err);
+    } finally {
+      setIsLoadingProfiles(false);
+    }
+  };
+
+
+  // [수정] 로그인된 유저가 있으면 프로필 목록 한 번 불러오기
+  useEffect(() => {
+    if (!user) return;
+    fetchProfiles();
+  }, [user]);
+
 
   // 새 메시지 이벤트
   const handleNewMessage = (_msg: any) => {
@@ -91,10 +168,12 @@ export default function Home() {
   };
 
   // 프로필 저장 (생성/수정 공통)
-  const handleSubmitProfile = (data: any) => {
+  const handleSubmitProfile =  async (data: any) => {
     // TODO: 서버 저장 로직 연결 후 목록 갱신
     setOpenProfileForm(false);
     setIsEditingProfile(false);
+
+    await fetchProfiles(); //[수정]supabase에서 프로필 가져오기
   };
 
   // 로그인 전: 로그인 UI만 노출
@@ -113,7 +192,13 @@ export default function Home() {
         <Navigation
           user={user}
           onLogout={handleLogout}
-          onOpenChat={() => setShowChat(true)}
+          onOpenChat={() => {
+            if (!initialChat) {
+              alert('채팅할 상대를 먼저 선택한 뒤, 피드/프로필에서 "채팅" 버튼을 눌러 주세요.');
+                return;
+            }
+              setShowChat(true);
+            }}
           onCreateProfile={handleCreateProfile}
           onProfileClick={handleProfileClick}
           hasNewMessages={hasNewMessages}
@@ -172,7 +257,7 @@ export default function Home() {
       )}
 
       {/* 채팅 시스템 */}
-      {showChat && (
+      {showChat && initialChat && (
         <ChatSystem
           onClose={() => setShowChat(false)}
           currentUser={user}
