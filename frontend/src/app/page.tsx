@@ -1,3 +1,4 @@
+// src/app/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -13,7 +14,7 @@ import UserProfileModal from '@/components/UserProfileModal';
 import FeedDetailModal from '@/components/FeedDetailModal';
 import AIRecommend from '@/components/AIRecommend';
 
-// 앱에서 사용할 최소 타입 (필요시 세부 타입으로 교체하세요)
+// 앱에서 사용할 최소 타입
 type User = {
   id: string;
   name: string;
@@ -21,8 +22,9 @@ type User = {
   department: string;
   year: number;
 };
-type Profile = any;   // Feed 카드/프로필 객체 형태 (컴포넌트 내부 타입에 맞게 조정 가능)
-type ChatInit = any;  // 채팅 초기 대상/데이터
+
+type Profile = any;   // posts + author 구조 (FeedList/FeedDetailModal에서 쓰는 타입)
+type ChatInit = any;
 
 export default function Home() {
   // 로그인 상태
@@ -34,17 +36,20 @@ export default function Home() {
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
   const [showUserProfileModal, setShowUserProfileModal] = useState(false);
 
+  // 현재 수정 중인 프로필
+  const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
+
   // 채팅
   const [showChat, setShowChat] = useState(false);
   const [hasNewMessages, setHasNewMessages] = useState(false);
   const [initialChat, setInitialChat] = useState<ChatInit | null>(null);
 
-  // UserProfileModal 등에 줄 전체 프로필 목록(필요시 실제 데이터로 갱신)
+  // 프로필 목록
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [isLoadingProfiles, setIsLoadingProfiles] = useState(false);
   const [viewMode, setViewMode] = useState<'recruit' | 'ai'>('recruit');
 
-  // 로그인 성공 콜백 (LoginPage -> 상위)
+  // 로그인 성공 콜백
   const handleLogin = (u: User) => {
     setUser(u);
   };
@@ -58,9 +63,10 @@ export default function Home() {
     setShowUserProfileModal(false);
     setHasNewMessages(false);
     setInitialChat(null);
+    setEditingProfile(null);
   };
 
-  // [수정] 채팅 시작 (DM 전용, target 필수)
+  // DM 채팅 시작
   const handleChatStart = (target?: any) => {
     if (!target) {
       alert('채팅할 상대 정보가 없습니다.');
@@ -68,63 +74,64 @@ export default function Home() {
     }
 
     console.log('[handleChatStart] target =', target);
-    setInitialChat(target);   // ChatSystem에서 author/id를 뽑아서 씀
+    setInitialChat(target);
     setShowChat(true);
     setHasNewMessages(false);
   };
 
+  // posts 테이블에서 프로필 목록 가져오기
   const fetchProfiles = async () => {
-  if (!user) return;
+    if (!user) return;
 
-  try {
-    setIsLoadingProfiles(true);
+    try {
+      setIsLoadingProfiles(true);
 
-    const { data, error } = await supabase
-      .from('posts')   // ✅ 상세 프로필 테이블 기준
-      .select(`
-        id,
-        user_id,
-        title,
-        description,
-        skills,
-        interests,
-        available,
-        experience,
-        contact,
-        created_at,
-        profiles (
+      const { data, error } = await supabase
+        .from('posts')
+        .select(`
           id,
-          name,
-          email,
-          department,
-          year
-        )
-      `)
-      .order('created_at', { ascending: false });
+          user_id,
+          title,
+          description,
+          skills,
+          interests,
+          available,
+          experience,
+          contact,
+          created_at,
+          profiles (
+            id,
+            name,
+            email,
+            department,
+            year
+          )
+        `)
+        .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error(
-        '프로필 목록 불러오기 오류:',
-        error.message,
-        error.details,
-        error.hint
-      );
-      return;
-    }
+      if (error) {
+        console.error(
+          '프로필 목록 불러오기 오류:',
+          error.message,
+          error.details,
+          error.hint,
+        );
+        return;
+      }
 
-    const rows = data ?? [];
+      const rows = data ?? [];
 
-    // 🔧 UI가 기대하는 구조로 맞추기 (profile.author.* 사용 가능하게)
-    const normalized = rows.map((row: any) => ({
-      ...row,
-      author: {
-        id: row.profiles?.id,                    // DM용 uuid
-        name: row.profiles?.name ?? '이름 없음',
-        email: row.profiles?.email ?? '',
-        department: row.profiles?.department ?? '',
-        year: row.profiles?.year ?? undefined,
-      },
-    }));
+      // UI에서 기대하는 구조로 author 필드 추가
+      const normalized = rows.map((row: any) => ({
+        ...row,
+        author: {
+          id: row.profiles?.id,
+          name: row.profiles?.name ?? '이름 없음',
+          email: row.profiles?.email ?? '',
+          department: row.profiles?.department ?? '',
+          year: row.profiles?.year ?? undefined,
+        },
+      }));
 
       setProfiles(normalized);
     } catch (err: any) {
@@ -134,20 +141,18 @@ export default function Home() {
     }
   };
 
-
-  // [수정] 로그인된 유저가 있으면 프로필 목록 한 번 불러오기
+  // 로그인 후 프로필 목록 로딩
   useEffect(() => {
     if (!user) return;
     fetchProfiles();
   }, [user]);
-
 
   // 새 메시지 이벤트
   const handleNewMessage = (_msg: any) => {
     if (!showChat) setHasNewMessages(true);
   };
 
-  // 피드(프로필) 카드 클릭 -> 상세 모달
+  // 피드 카드 클릭 -> 상세 모달
   const handleFeedClick = (profile: Profile) => {
     setSelectedProfile(profile);
   };
@@ -157,26 +162,71 @@ export default function Home() {
     setShowUserProfileModal(true);
   };
 
-  // 프로필 생성/수정 폼
+  // 프로필 작성 버튼 (새로 작성)
   const handleCreateProfile = () => {
     setIsEditingProfile(false);
+    setEditingProfile(null);
     setOpenProfileForm(true);
   };
+
+  // 프로필 수정 버튼 (FeedDetailModal에서 호출)
   const handleEditProfile = (profile?: Profile) => {
+    const target = profile ?? selectedProfile;
+
+    if (!target) {
+      console.warn('수정할 프로필이 없습니다.');
+      return;
+    }
+
     setIsEditingProfile(true);
+    setEditingProfile(target);
     setOpenProfileForm(true);
+  };
+
+  // ✅ 프로필 삭제 버튼 (FeedDetailModal에서 호출)
+  const handleDeleteProfile = async () => {
+    if (!selectedProfile) return;
+
+    const ok = window.confirm('이 피드를 삭제하시겠습니까?');
+    if (!ok) return;
+
+    try {
+      const { error } = await supabase
+        .from('posts')
+        .delete()
+        .eq('id', selectedProfile.id);
+
+      if (error) {
+        console.error('피드 삭제 오류:', error.message, error.details);
+        alert('삭제 중 오류가 발생했습니다.');
+        return;
+      }
+
+      // 프론트 목록에서도 제거
+      setProfiles((prev) =>
+        prev.filter((p: any) => p.id !== selectedProfile.id),
+      );
+
+      // 모달 닫기
+      setSelectedProfile(null);
+    } catch (err: any) {
+      console.error('피드 삭제 예외:', err?.message ?? err);
+      alert('삭제 중 오류가 발생했습니다.');
+    }
   };
 
   // 프로필 저장 (생성/수정 공통)
-  const handleSubmitProfile =  async (data: any) => {
-    // TODO: 서버 저장 로직 연결 후 목록 갱신
+  const handleSubmitProfile = async (_data: any) => {
+    // ProfileForm 안에서 DB upsert는 이미 수행됨
     setOpenProfileForm(false);
     setIsEditingProfile(false);
+    setEditingProfile(null);
 
-    await fetchProfiles(); //[수정]supabase에서 프로필 가져오기
+    // 최신 목록 다시 불러오기
+    await fetchProfiles();
   };
 
-  // 로그인 전: 로그인 UI만 노출
+  // 로그인 전
   if (!user) {
     return (
       <main className="min-h-screen">
@@ -185,7 +235,7 @@ export default function Home() {
     );
   }
 
-  // 로그인 후: 내비 + 본문(대시보드) + 각종 모달
+  // 로그인 후
   return (
     <main className="min-h-screen">
       <header className="border-b bg-white/80 backdrop-blur">
@@ -194,11 +244,13 @@ export default function Home() {
           onLogout={handleLogout}
           onOpenChat={() => {
             if (!initialChat) {
-              alert('채팅할 상대를 먼저 선택한 뒤, 피드/프로필에서 "채팅" 버튼을 눌러 주세요.');
-                return;
+              alert(
+                '채팅할 상대를 먼저 선택한 뒤, 피드/프로필에서 "채팅" 버튼을 눌러 주세요.',
+              );
+              return;
             }
-              setShowChat(true);
-            }}
+            setShowChat(true);
+          }}
           onCreateProfile={handleCreateProfile}
           onProfileClick={handleProfileClick}
           hasNewMessages={hasNewMessages}
@@ -224,12 +276,9 @@ export default function Home() {
           profile={selectedProfile}
           onClose={() => setSelectedProfile(null)}
           onEdit={handleEditProfile}
-          onDelete={() => {
-            // TODO: 삭제 로직
-            setSelectedProfile(null);
-          }}
+          onDelete={handleDeleteProfile}         
           onChatStart={() => handleChatStart(selectedProfile)}
-          isOwner={Boolean((selectedProfile as any)?.author?.name === user?.name)}
+          isOwner={selectedProfile?.author?.id === user.id}
         />
       )}
 
@@ -243,15 +292,16 @@ export default function Home() {
         />
       )}
 
-      {/* 프로필 생성/수정 폼 */}
+      {/* 프로필 작성/수정 폼 */}
       {openProfileForm && (
         <ProfileForm
           onClose={() => {
             setOpenProfileForm(false);
             setIsEditingProfile(false);
+            setEditingProfile(null);
           }}
           onSubmit={handleSubmitProfile}
-          initialData={isEditingProfile ? (user as any) : undefined}
+          initialData={isEditingProfile ? editingProfile ?? undefined : undefined}
           isEditing={isEditingProfile}
         />
       )}

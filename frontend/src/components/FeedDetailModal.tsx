@@ -12,15 +12,27 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { MessageCircle, Pencil, Trash2, X } from 'lucide-react';
+import { MessageCircle, Pencil, Trash2 } from 'lucide-react';
+
+// posts.interests JSON 타입
+type Interest = {
+  category?: string; // 'club' | 'contest' | ...
+  position?: string; // 'frontend' | 'backend' | 'fullstack' ...
+};
 
 // FeedList와 맞춘 타입(대부분 optional)
 interface Profile {
   id: string;
   title?: string;
   description?: string;
+
+  // 과거 단일 컬럼
   category?: string;
   position?: any;
+
+  // JSONB
+  interests?: Interest | Interest[];
+
   experience?: any;
   contact?: string;
   skills?: string[];
@@ -110,6 +122,50 @@ function normalizeEnum(
   return String(raw);
 }
 
+// ✅ interests / category 에서 categoryKey 뽑기
+function getCategoryKey(profile: Profile): string {
+  const interests = profile.interests;
+
+  if (Array.isArray(interests)) {
+    const first = interests[0];
+    if (first?.category) return first.category;
+  }
+
+  if (interests && !Array.isArray(interests) && typeof interests === 'object') {
+    const obj = interests as Interest;
+    if (obj.category) return obj.category;
+  }
+
+  if (profile.category) return profile.category;
+
+  return 'etc';
+}
+
+// ✅ interests / position / profile.position 에서 positionKey 뽑기
+function getPositionKey(profile: Profile): string | null {
+  const interests = profile.interests;
+
+  if (Array.isArray(interests)) {
+    const first = interests[0];
+    if (first?.position) return first.position;
+  }
+
+  if (interests && !Array.isArray(interests) && typeof interests === 'object') {
+    const obj = interests as Interest;
+    if (obj.position) return obj.position;
+  }
+
+  const raw = profile.position;
+  if (!raw) return null;
+
+  if (typeof raw === 'string') return raw;
+  if (typeof raw === 'object' && 'value' in raw) {
+    return String((raw as any).value);
+  }
+
+  return null;
+}
+
 export default function FeedDetailModal({
   profile,
   onClose,
@@ -131,11 +187,14 @@ export default function FeedDetailModal({
     profile.createdAt ?? profile.created_at ?? new Date().toISOString();
   const createdAtLabel = new Date(createdAtRaw).toLocaleString();
 
-  const categoryKey = profile.category ?? 'etc';
-  const categoryLabel =
-    categoryLabels[categoryKey as keyof typeof categoryLabels] ?? '기타';
+  const categoryKey = getCategoryKey(profile);
+  const categoryLabel = categoryLabels[categoryKey] ?? '기타';
 
-  const positionLabel = normalizeEnum(profile.position, positionLabels, '미지정');
+  const positionKey = getPositionKey(profile);
+  const positionLabel = positionKey
+    ? positionLabels[positionKey] ?? positionKey
+    : '미지정';
+
   const experienceLabel = normalizeEnum(
     profile.experience,
     experienceLabels,
@@ -145,7 +204,7 @@ export default function FeedDetailModal({
   return (
     <Dialog open={true} onOpenChange={onClose}>
       <DialogContent className="max-w-3xl max-h-[90vh] p-0">
-        {/* 헤더 : 왼쪽 프로필, 오른쪽에 채팅 + 편집/삭제 + X(딱 하나) */}
+        {/* 헤더 */}
         <DialogHeader className="px-6 pt-4 pb-2 border-b flex flex-row items-center justify-between">
           <div className="flex items-center gap-3">
             <Avatar className="h-10 w-10">
@@ -167,14 +226,17 @@ export default function FeedDetailModal({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* 내 글일 때만 수정/삭제 보이게 */}
+          {/* 오른쪽 아이콘들: 닫기 X와 좀 떨어지도록 mr-8 추가 */}
+          <div className="flex items-center gap-2 mr-8">
             {isOwner && (
               <>
                 <Button
                   variant="outline"
                   size="icon"
-                  onClick={() => onEdit(profile)}
+                  onClick={() => {
+                    onClose();
+                    onEdit(profile);
+                  }}
                   className="h-8 w-8"
                 >
                   <Pencil className="h-4 w-4" />
@@ -192,7 +254,7 @@ export default function FeedDetailModal({
           </div>
         </DialogHeader>
 
-        {/* 내용 영역만 스크롤 */}
+        {/* 내용 영역 */}
         <ScrollArea className="max-h-[80vh] px-6 py-4">
           {/* 기본 정보 */}
           <section className="space-y-2">
@@ -262,16 +324,23 @@ export default function FeedDetailModal({
             {createdAtLabel}에 작성됨
           </p>
         </ScrollArea>
-        <div className="w-full flex justify-end px-6 pb-4">
-        <Button
+
+        {/* 채팅하기 버튼 - 내 피드일 때는 숨김 */}
+        {!isOwner && (
+          <div className="w-full flex justify-end px-6 pb-4">
+            <Button
               size="sm"
-              onClick={onChatStart}
+              onClick={() => {
+                onChatStart();
+                onClose();
+              }}
               className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md"
             >
               <MessageCircle className="h-4 w-4" />
               채팅하기
             </Button>
-            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
