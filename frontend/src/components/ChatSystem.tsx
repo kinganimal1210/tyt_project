@@ -11,6 +11,9 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { X, Send, Users } from 'lucide-react';
 
+// ★ 추가: Supabase 클라이언트
+import { supabase } from '@/lib/supabaseClient';
+
 interface Message {
   id: string;
   text: string;
@@ -103,6 +106,44 @@ export default function ChatSystem({
     []
   );
 
+  // ★ 추가: Supabase에서 이전 메시지 불러오기
+  useEffect(() => {
+    if (!chatId) return;
+
+    let cancelled = false;
+
+    (async () => {
+      const { data, error } = await supabase
+        .from('Messages')                // 테이블 이름 그대로 사용
+        .select('*')
+        .eq('chat_id', chatId)           // 같은 방의 메시지들
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('[ChatSystem] load history error', error);
+        return;
+      }
+      if (!data || cancelled) return;
+
+      setMessages(prev => {
+        const history = data.map(row => fromSupabaseRow(row, currentUser.id));
+
+        // 소켓으로 이미 들어온 메시지가 있을 수 있으니 merge + dedupe
+        const map = new Map<string, Message>();
+        for (const m of [...history, ...prev]) {
+          map.set(m.id, m);
+        }
+        return Array.from(map.values()).sort(
+          (a, b) => a.timestamp - b.timestamp
+        );
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [chatId, currentUser.id]);
+
   // [수정] 소켓 연결 & DM 방 join (global-chat 안 씀)
   useEffect(() => {
     if (!chatId) {
@@ -125,6 +166,7 @@ export default function ChatSystem({
       s.emit('join', { chatId, userId: currentUser.id });
     });
 
+    // 서버에서 Messages row 그대로 내려준다고 가정
     s.on('chat:message', (row: any) => {
       const rowChatId: string = row.chat_id ?? '';
       if (rowChatId !== chatId) return; // 이 DM 방이 아닌 메시지는 무시
@@ -166,11 +208,14 @@ export default function ChatSystem({
     setNewMessage('');
 
     console.log('[send] to', chatId, 'text =', text);
+
+    // 서버에서 이 payload를 받아서 Supabase Messages에 insert + row 다시 emit
     s.emit('chat:message', {
       chatId,
       senderId: currentUser.id,
       content: text,
     });
+
     if (onNewMessage) onNewMessage && onNewMessage();
   };
 
