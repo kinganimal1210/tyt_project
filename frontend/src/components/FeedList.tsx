@@ -235,150 +235,156 @@ export default function FeedList({
       </div>
 
       {/* Profile Cards */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {filteredProfiles.map((profile) => {
-          const author = profile.author ?? {
-            name: '이름 없음',
-            department: '',
-            year: 0,
-          };
+      <div className="max-h-[640px] overflow-y-auto pr-1">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {filteredProfiles.map((profile) => {
+            const author = profile.author ?? {
+              name: '이름 없음',
+              department: '',
+              year: 0,
+            };
 
-          const skills = Array.isArray(profile.skills) ? profile.skills : [];
-          const projects = Array.isArray(profile.projects)
-            ? profile.projects
-            : [];
+            const skills = Array.isArray(profile.skills) ? profile.skills : [];
+            const projects = Array.isArray(profile.projects)
+              ? profile.projects
+              : [];
 
-          const createdAtRaw =
-            profile.createdAt ?? profile.created_at ?? new Date().toISOString();
-          const createdAtLabel = new Date(createdAtRaw).toLocaleDateString();
+            const createdAtRaw =
+              profile.createdAt ??
+              profile.created_at ??
+              new Date().toISOString();
+            const createdAtLabel = new Date(createdAtRaw).toLocaleDateString();
 
-          const categoryKey = profile.category as keyof typeof categoryLabels;
+            const categoryKey = profile.category as keyof typeof categoryLabels;
 
-          const positionLabel = normalizeEnum(
-            profile.position,
-            positionLabels,
-            '미지정',
-          );
-          const experienceLabel = normalizeEnum(
-            profile.experience,
-            experienceLabels,
-            '미지정',
-          );
+            const positionLabel = normalizeEnum(
+              profile.position,
+              positionLabels,
+              '미지정',
+            );
+            const experienceLabel = normalizeEnum(
+              profile.experience,
+              experienceLabels,
+              '미지정',
+            );
 
-          return (
-            <Card
-              key={profile.id}
-              className="hover:shadow-md transition-shadow cursor-pointer"
-              onClick={() => onFeedClick(profile)}
-            >
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-10 w-10">
-                      <AvatarFallback>
-                        {(author.name ?? 'U').charAt(0)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <CardTitle className="text-base">
-                        {profile.title ?? '제목 없음'}
-                      </CardTitle>
-                      <CardDescription className="text-xs">
-                        {author.name ?? '이름 없음'} • {author.department ?? ''}{' '}
-                        {author.year ? `${author.year}학년` : ''}
-                      </CardDescription>
-                    </div>
-                  </div>
-                  <Badge variant="outline" className="text-xs">
-                    {categoryKey && categoryLabels[categoryKey]
-                      ? categoryLabels[categoryKey]
-                      : '기타'}
-                  </Badge>
-                </div>
-              </CardHeader>
-
-              <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground line-clamp-3">
-                  {profile.description ?? '설명 없음'}
-                </p>
-
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="font-medium">포지션:</span>
-                    <Badge variant="secondary" className="text-xs">
-                      {positionLabel}
-                    </Badge>
-                    <span className="font-medium">경험:</span>
-                    <Badge variant="outline" className="text-xs">
-                      {experienceLabel}
-                    </Badge>
-                  </div>
-
-                  {/* 기술 스택 */}
-                  <div>
-                    <div className="text-xs font-medium mb-1">기술 스택:</div>
-                    <div className="flex flex-wrap gap-1">
-                      {skills.slice(0, 3).map((skill) => (
-                        <Badge
-                          key={skill}
-                          variant="secondary"
-                          className="text-xs"
-                        >
-                          {skill}
-                        </Badge>
-                      ))}
-                      {skills.length > 3 && (
-                        <Badge variant="outline" className="text-xs">
-                          +{skills.length - 3}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* 프로젝트 */}
-                  {projects.length > 0 && (
-                    <div>
-                      <div className="text-xs font-medium mb-1">프로젝트:</div>
-                      <div className="flex flex-wrap gap-1">
-                        {projects.map((project) => (
-                          <Badge
-                            key={project}
-                            variant="outline"
-                            className="text-xs"
-                          >
-                            {project}
-                          </Badge>
-                        ))}
+            return (
+              <Card
+                key={profile.id}
+                className="hover:shadow-md transition-shadow cursor-pointer"
+                onClick={() => onFeedClick(profile)}
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-10 w-10">
+                        <AvatarFallback>
+                          {(author.name ?? 'U').charAt(0)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <CardTitle className="text-base">
+                          {profile.title ?? '제목 없음'}
+                        </CardTitle>
+                        <CardDescription className="text-xs">
+                          {author.name ?? '이름 없음'} • {author.department ?? ''}{' '}
+                          {author.year ? `${author.year}학년` : ''}
+                        </CardDescription>
                       </div>
                     </div>
-                  )}
-                </div>
+                    <Badge variant="outline" className="text-xs">
+                      {categoryKey && categoryLabels[categoryKey]
+                        ? categoryLabels[categoryKey]
+                        : '기타'}
+                    </Badge>
+                  </div>
+                </CardHeader>
 
-                <div className="pt-2">
-                  <Button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onChatStart(profile);
-                    }}
-                    className="w-full hover:bg-green-50 transition-colors"
-                    style={{
-                      backgroundColor: 'var(--color-success)',
-                      borderColor: 'var(--color-success)',
-                    }}
-                    size="sm"
-                  >
-                    <MessageCircle className="h-4 w-4 mr-2" />
-                    연락하기
-                  </Button>
-                </div>
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground line-clamp-3">
+                    {profile.description ?? '설명 없음'}
+                  </p>
 
-                <div className="text-xs text-muted-foreground">
-                  {createdAtLabel}에 작성됨
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="font-medium">포지션:</span>
+                      <Badge variant="secondary" className="text-xs">
+                        {positionLabel}
+                      </Badge>
+                      <span className="font-medium">경험:</span>
+                      <Badge variant="outline" className="text-xs">
+                        {experienceLabel}
+                      </Badge>
+                    </div>
+
+                    {/* 기술 스택 */}
+                    <div>
+                      <div className="text-xs font-medium mb-1">기술 스택:</div>
+                      <div className="flex flex-wrap gap-1">
+                        {skills.slice(0, 3).map((skill) => (
+                          <Badge
+                            key={skill}
+                            variant="secondary"
+                            className="text-xs"
+                          >
+                            {skill}
+                          </Badge>
+                        ))}
+                        {skills.length > 3 && (
+                          <Badge variant="outline" className="text-xs">
+                            +{skills.length - 3}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 프로젝트 */}
+                    {projects.length > 0 && (
+                      <div>
+                        <div className="text-xs font-medium mb-1">
+                          프로젝트:
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {projects.map((project) => (
+                            <Badge
+                              key={project}
+                              variant="outline"
+                              className="text-xs"
+                            >
+                              {project}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-2">
+                    <Button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onChatStart(profile);
+                      }}
+                      className="w-full hover:bg-green-50 transition-colors"
+                      style={{
+                        backgroundColor: 'var(--color-success)',
+                        borderColor: 'var(--color-success)',
+                      }}
+                      size="sm"
+                    >
+                      <MessageCircle className="h-4 w-4 mr-2" />
+                      연락하기
+                    </Button>
+                  </div>
+
+                  <div className="text-xs text-muted-foreground">
+                    {createdAtLabel}에 작성됨
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       </div>
 
       {filteredProfiles.length === 0 && (
