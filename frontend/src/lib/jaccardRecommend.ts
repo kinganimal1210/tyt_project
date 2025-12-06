@@ -1,42 +1,89 @@
 // src/lib/jaccardRecommend.ts
-// Jaccard 유사도 + 추천 로직 (순수 함수만)
 
-export type Profile = {
-  id: string;
-  skill_tags: string[] | null;
-  interest_tags: string[] | null;
-  role_tags: string[] | null;
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+export type AiRecommendFilters = {
+  skills: string;
+  interests: string;
+  availability: string;
+  teamSize: number | null;
+  note: string;
+  desiredRole: string;
+  collabMode: string;
+  experienceLevel: string;
+  preferredYearMin: number | null;
+  preferredYearMax: number | null;
+  priority: 'balanced' | 'skills' | 'time' | 'style';
 };
+
+// ---- 타입 정의 ----
+
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | Json[]
+  | { [key: string]: Json };
+
+export interface PostRow {
+  id: string;
+  user_id: string;
+  skills: Json | null;
+  interests: Json | null;
+  available: Json | null;
+  personality: Json | null;
+  experience: Json | null;
+}
 
 export type RecommendResult = {
-  targetId: string;
+  postId: string;          // posts.id
+  userId: string;          // posts.user_id (작성자)
   score: number;
-  jaccardSkill: number;
-  jaccardInterest: number;
-  jaccardRole: number;
+
+  // 세부 점수
+  skillScore: number;
+  interestScore: number;
+  availableScore: number;
+  personalityScore: number;
+  experienceScore: number;
+
   commonSkills: string[];
+  commonInterests: string[];
+
+  // API(route.ts)에서 사용하기 위한 필드 (동일 정보 재노출)
+  targetUserId: string;    // == userId
+  targetPostId: string;    // == postId
 };
 
-function toSet(arr: unknown): Set<string> {
+// ---- 유틸: jsonb → Set<string> ----
+
+function toTagSet(src: Json | null): Set<string> {
+  if (src === null || src === undefined) return new Set();
+
   let list: string[] = [];
 
-  if (Array.isArray(arr)) {
-    list = arr.map((v) => String(v));
-  } else if (typeof arr === 'string') {
-    // 문자열인 경우: JSON 배열 문자열이거나, 그냥 "a,b,c" 형태일 수 있음
+  if (Array.isArray(src)) {
+    // ["React", "TS"]
+    list = src.map((v) => String(v));
+  } else if (typeof src === 'string') {
+    // '["React","TS"]' 또는 'React,TS'
+    const str = src.trim();
+    if (!str) return new Set();
+
     try {
-      const parsed = JSON.parse(arr);
+      const parsed = JSON.parse(str);
       if (Array.isArray(parsed)) {
         list = parsed.map((v) => String(v));
       } else {
-        list = arr.split(',').map((v) => v.trim());
+        list = str.split(',').map((v) => v.trim());
       }
     } catch {
-      list = arr.split(',').map((v) => v.trim());
+      list = str.split(',').map((v) => v.trim());
     }
-  } else if (arr && typeof arr === 'object') {
-    // jsonb가 { "React": true, "TS": true } 같은 형태라면 key들을 태그로 사용
-    list = Object.keys(arr as Record<string, unknown>);
+  } else if (typeof src === 'object') {
+    // {"React": true, "TS": true} 같은 jsonb
+    list = Object.keys(src as Record<string, Json>);
   }
 
   return new Set(
@@ -46,70 +93,158 @@ function toSet(arr: unknown): Set<string> {
   );
 }
 
-// Jaccard 유사도: J(A,B) = |A ∩ B| / |A ∪ B|
-export function jaccard(a: unknown, b: unknown): number {
-  const setA = toSet(a);
-  const setB = toSet(b);
-
-  if (setA.size === 0 && setB.size === 0) return 0;
-
-  let intersection = 0;
-  for (const x of setA) {
-    if (setB.has(x)) intersection++;
-  }
-
-  const unionSize = new Set([...setA, ...setB]).size;
-  if (unionSize === 0) return 0;
-  return intersection / unionSize;
-}
-
-// 교집합 스킬 목록
-export function intersection(a: unknown, b: unknown): string[] {
-  const setA = toSet(a);
-  const setB = toSet(b);
+function intersectionSet(a: Json | null, b: Json | null): string[] {
+  const A = toTagSet(a);
+  const B = toTagSet(b);
   const result: string[] = [];
-  for (const x of setA) {
-    if (setB.has(x)) result.push(x);
+
+  for (const x of A) {
+    if (B.has(x)) result.push(x);
   }
   return result;
 }
 
-/**
- * Jaccard 기반 추천
- * - me: 기준이 되는 내 프로필
- * - candidates: 추천 후보 프로필들
- * - k: 상위 몇 명을 추천할지
- */
-export function recommendByJaccard(
-  me: Profile,
-  candidates: Profile[],
-  k: number = 20
+// ---- Jaccard 유사도 ----
+
+export function jaccard(a: Json | null, b: Json | null): number {
+  const setA = toTagSet(a);
+  const setB = toTagSet(b);
+
+  if (setA.size === 0 && setB.size === 0) return 0;
+
+  let inter = 0;
+  for (const x of setA) {
+    if (setB.has(x)) inter++;
+  }
+
+  const unionSize = new Set([...setA, ...setB]).size;
+  if (unionSize === 0) return 0;
+
+  return inter / unionSize; // 0 ~ 1
+}
+
+// ---- 포스트 배열에서 Jaccard 기반 추천 ----
+
+export function recommendByJaccardFromPosts(
+  mePost: PostRow,
+  candidates: PostRow[],
+  k: number = 20,
+  filters?: AiRecommendFilters
 ): RecommendResult[] {
   const results: RecommendResult[] = [];
 
-  for (const c of candidates) {
-    if (c.id === me.id) continue;
+  let skillWeight = 1;
+  let timeWeight = 1;
+  let styleWeight = 1;
+  switch (filters?.priority) {
+    case 'skills':
+      skillWeight = 1.2;
+      break;
+    case 'time':
+      timeWeight = 1.2;
+      break;
+    case 'style':
+      styleWeight = 1.2;
+      break;
+    case 'balanced':
+    default:
+      break;
+  }
 
-    const jSkill = jaccard(me.skill_tags, c.skill_tags);
-    const jInterest = jaccard(me.interest_tags, c.interest_tags);
-    const jRole = jaccard(me.role_tags, c.role_tags);
+  // 사용자가 AI 추천 모드에서 입력한 조건을 우선적으로 사용하고,
+  // 비어 있으면 mePost(내가 올린 글)의 정보를 fallback으로 사용한다.
+  const querySkills: Json | null =
+    filters && filters.skills && filters.skills.trim().length > 0
+      ? (filters.skills as Json)
+      : mePost.skills;
 
-    // 가중치 (필요하면 조정)
-    const score = 0.6 * jSkill + 0.3 * jInterest + 0.1 * jRole;
+  const queryInterests: Json | null =
+    filters && filters.interests && filters.interests.trim().length > 0
+      ? (filters.interests as Json)
+      : mePost.interests;
 
-    if (score <= 0) continue; // 완전 무관하면 스킵
+  const queryAvailable: Json | null =
+    filters && filters.availability && filters.availability.trim().length > 0
+      ? (filters.availability as Json)
+      : mePost.available;
 
-    const commonSkills = intersection(me.skill_tags, c.skill_tags);
+  const queryPersonality: Json | null =
+    filters && filters.collabMode && filters.collabMode.trim().length > 0
+      ? (filters.collabMode as Json)
+      : mePost.personality;
+
+  const queryExperience: Json | null =
+    filters && filters.experienceLevel && filters.experienceLevel.trim().length > 0
+      ? (filters.experienceLevel as Json)
+      : mePost.experience;
+
+  for (const p of candidates) {
+    if (p.id === mePost.id) continue;
+
+    const skillScore = jaccard(querySkills, p.skills);
+    const interestScore = jaccard(queryInterests, p.interests);
+    const availableScore = jaccard(queryAvailable, p.available);
+    const personalityScore = jaccard(queryPersonality, p.personality);
+    const experienceScore = jaccard(queryExperience, p.experience);
+
+    // 가중치는 필요에 따라 조정
+    const score =
+      0.4 * skillScore * skillWeight +
+      0.3 * interestScore * skillWeight +
+      0.1 * availableScore * timeWeight +
+      0.1 * personalityScore * styleWeight +
+      0.1 * experienceScore * skillWeight;
+
+    if (score <= 0) continue;
+
+    const commonSkills = intersectionSet(querySkills, p.skills);
+    const commonInterests = intersectionSet(queryInterests, p.interests);
 
     results.push({
-      targetId: c.id,
+      postId: p.id,
+      userId: p.user_id,
       score,
-      jaccardSkill: jSkill,
-      jaccardInterest: jInterest,
-      jaccardRole: jRole,
+      skillScore,
+      interestScore,
+      availableScore,
+      personalityScore,
+      experienceScore,
       commonSkills,
+      commonInterests,
+      // API에서 사용할 alias 필드
+      targetUserId: p.user_id,
+      targetPostId: p.id,
     });
   }
 
   return results.sort((a, b) => b.score - a.score).slice(0, k);
+}
+
+// ---- Supabase에서 DB 읽어서 추천 계산 ----
+
+export async function getJaccardRecommendationsForUser(
+  supabase: SupabaseClient<any>,
+  userId: string,
+  limit: number = 20,
+  filters?: AiRecommendFilters
+): Promise<RecommendResult[]> {
+  // 1. posts 전체 로드 (필요하면 where 조건 추가)
+  const { data, error } = await supabase
+    .from('posts')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  if (!data || data.length === 0) return [];
+
+  const posts = data as PostRow[];
+
+  // 2. 내 포스트(기준 포스트) 찾기
+  const mePost = posts.find((p) => p.user_id === userId);
+  if (!mePost) return [];
+
+  const candidates = posts.filter((p) => p.id !== mePost.id);
+
+  // 3. Jaccard 기반 점수 계산
+  return recommendByJaccardFromPosts(mePost, candidates, limit, filters);
 }
