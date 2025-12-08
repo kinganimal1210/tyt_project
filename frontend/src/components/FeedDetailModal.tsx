@@ -34,6 +34,8 @@ interface Profile {
   interests?: Interest | Interest[];
 
   experience?: any;
+  available?: any;
+  personality?: any;
   contact?: string;
   skills?: string[];
   projects?: string[];
@@ -77,6 +79,19 @@ const experienceLabels: Record<string, string> = {
   beginner: '초급',
   intermediate: '중급',
   advanced: '고급',
+};
+
+const availabilityLabels: Record<string, string> = {
+  weekday_evening: '주중 저녁 위주',
+  weekend: '주말 위주',
+  flexible: '상관없음 / 유동적',
+};
+
+const personalityLabels: Record<string, string> = {
+  quiet_steady: '차분하지만 꾸준한 스타일',
+  proactive_leader: '적극적으로 리딩하는 스타일',
+  humorous: '유머러스하고 분위기 메이커',
+  detail_oriented: '꼼꼼하고 디테일을 중시',
 };
 
 // string / 객체 뭐가 와도 사람이 읽을 수 있는 라벨로 바꿔주는 함수
@@ -166,6 +181,26 @@ function getPositionKey(profile: Profile): string | null {
   return null;
 }
 
+function getAvailabilityCode(raw: any): string | null {
+  if (!raw) return null;
+  if (typeof raw === 'string') return raw;
+  if (typeof raw === 'object' && raw !== null) {
+    if ('value' in raw) return String((raw as any).value);
+    if ('type' in raw) return String((raw as any).type);
+  }
+  return null;
+}
+
+function getPersonalityCode(raw: any): string | null {
+  if (!raw) return null;
+  if (typeof raw === 'string') return raw;
+  if (typeof raw === 'object' && raw !== null) {
+    if ('value' in raw) return String((raw as any).value);
+    if ('style' in raw) return String((raw as any).style);
+  }
+  return null;
+}
+
 export default function FeedDetailModal({
   profile,
   onClose,
@@ -198,6 +233,18 @@ export default function FeedDetailModal({
   const experienceLabel = normalizeEnum(
     profile.experience,
     experienceLabels,
+    '미지정',
+  );
+
+  const availabilityLabel = normalizeEnum(
+    getAvailabilityCode(profile.available),
+    availabilityLabels,
+    '미지정',
+  );
+
+  const personalityLabel = normalizeEnum(
+    getPersonalityCode(profile.personality),
+    personalityLabels,
     '미지정',
   );
 
@@ -266,6 +313,17 @@ export default function FeedDetailModal({
               <span className="font-semibold ml-3">경험</span>
               <Badge variant="outline" className="text-xs">
                 {experienceLabel}
+              </Badge>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 text-xs mt-1">
+              <span className="font-semibold">시간대</span>
+              <Badge variant="outline" className="text-xs">
+                {availabilityLabel}
+              </Badge>
+              <span className="font-semibold ml-3">협업 스타일</span>
+              <Badge variant="outline" className="text-xs">
+                {personalityLabel}
               </Badge>
             </div>
 

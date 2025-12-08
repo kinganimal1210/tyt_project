@@ -96,6 +96,7 @@ export default function Home() {
           skills,
           interests,
           available,
+          personality,
           experience,
           contact,
           created_at,

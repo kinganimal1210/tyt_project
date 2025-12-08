@@ -4,17 +4,13 @@ import { getJaccardRecommendationsForUser } from '@/lib/jaccardRecommend';
 import { getAnnRecommendationsForUser, type AnnWeights } from '@/lib/annRecommend';
 
 type AiRecommendFilters = {
-  skills: string;
-  interests: string;
-  availability: string;
-  teamSize: number | null;
-  note: string;
-  desiredRole: string;
-  collabMode: string;
-  experienceLevel: string;
-  preferredYearMin: number | null;
-  preferredYearMax: number | null;
-  priority: 'balanced' | 'skills' | 'time' | 'style';
+  skills: string;               // 사용자가 입력한 희망 기술 / 스택
+  interests: string;            // 관심 분야 / 카테고리
+  availability: string;         // 가능한 시간대 코드 ('' | 'weekday_evening' | 'weekend' | 'flexible')
+  desiredRole: string;          // 원하는 역할 / 포지션
+  experienceLevel: string;      // 원하는 팀원 경험 수준 코드 ('' | 'beginner' | 'intermediate' | 'advanced')
+  preferredYearMin: number | null; // 선호 학년 최소 (null이면 제한 없음)
+  preferredYearMax: number | null; // 선호 학년 최대 (null이면 제한 없음)
 };
 
 // Supabase 클라이언트 (타입 제너릭/Database 타입 전혀 안 씀)

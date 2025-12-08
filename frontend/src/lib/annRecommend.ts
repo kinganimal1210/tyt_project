@@ -15,17 +15,13 @@ import type { Json, PostRow } from './jaccardRecommend';
 import { jaccard } from './jaccardRecommend';
 
 export type AiRecommendFilters = {
-  skills: string;
-  interests: string;
-  availability: string;
-  teamSize: number | null;
-  note: string;
-  desiredRole: string;
-  collabMode: string;
-  experienceLevel: string;
-  preferredYearMin: number | null;
-  preferredYearMax: number | null;
-  priority: 'balanced' | 'skills' | 'time' | 'style';
+  skills: string;               // 희망 기술 / 스택
+  interests: string;            // 관심 분야 / 카테고리
+  availability: string;         // 가능한 시간대 코드 ('' | 'weekday_evening' | 'weekend' | 'flexible')
+  desiredRole: string;          // 원하는 역할 / 포지션 (현재 ANN에서는 직접 사용 X, 확장 시 활용 가능)
+  experienceLevel: string;      // 원하는 팀원 경험 수준 코드 ('' | 'beginner' | 'intermediate' | 'advanced')
+  preferredYearMin: number | null; // 선호 학년 최소 (null이면 제한 없음)
+  preferredYearMax: number | null; // 선호 학년 최대 (null이면 제한 없음)
 };
 
 // ---------- 기본 타입 ----------
@@ -211,10 +207,9 @@ function buildFeatureVector(params: {
       ? (filters.availability as Json)
       : mePost.available;
 
-  const queryPersonality: Json | null =
-    filters && filters.collabMode && filters.collabMode.trim().length > 0
-      ? (filters.collabMode as Json)
-      : mePost.personality;
+  // 협업 스타일 / 성향은 현재 별도 필터 입력 없이
+  // 내 포스트(personality)를 기준으로만 사용
+  const queryPersonality: Json | null = mePost.personality;
 
   const queryExperience: Json | null =
     filters && filters.experienceLevel && filters.experienceLevel.trim().length > 0
@@ -231,30 +226,13 @@ function buildFeatureVector(params: {
   const jPersBase = jaccard(queryPersonality, candPost.personality);
   const jExpBase = jaccard(queryExperience, candPost.experience);
 
-  // priority에 따라 feature별 가중치 설정
-  let skillWeight = 1;
-  let timeWeight = 1;
-  let styleWeight = 1;
-  switch (filters?.priority) {
-    case 'skills':
-      skillWeight = 1.2;
-      break;
-    case 'time':
-      timeWeight = 1.2;
-      break;
-    case 'style':
-      styleWeight = 1.2;
-      break;
-    case 'balanced':
-    default:
-      break;
-  }
-
-  let jSkill = clamp01(jSkillBase * skillWeight);
-  let jInterest = clamp01(jInterestBase * skillWeight);
-  let jAvail = clamp01(jAvailBase * timeWeight);
-  let jPers = clamp01(jPersBase * styleWeight);
-  let jExp = clamp01(jExpBase * skillWeight);
+  // 현재는 priority 필터를 사용하지 않고,
+  // 각 유사도를 그대로 0~1 범위로 클램핑해서 feature로 사용한다.
+  let jSkill = clamp01(jSkillBase);
+  let jInterest = clamp01(jInterestBase);
+  let jAvail = clamp01(jAvailBase);
+  let jPers = clamp01(jPersBase);
+  let jExp = clamp01(jExpBase);
 
   let sameDept = 0;
   if (meProfile?.department && candProfile?.department) {
@@ -288,11 +266,6 @@ function buildFeatureVector(params: {
   const inter = interactionScore(candInteraction);
   let interScore = inter.score;
   let hasInteraction = inter.hasInteraction;
-
-  // 성향/분위기(priority === 'style')를 더 중시하는 경우, 과거 상호작용 점수에 약간 가중치
-  if (filters?.priority === 'style') {
-    interScore = clamp01(interScore * 1.2);
-  }
 
   return [
     jSkill,

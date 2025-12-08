@@ -5,11 +5,17 @@ import { useRouter } from 'next/navigation';
 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select';
 import { Sparkles, Filter } from 'lucide-react';
 
 // ---------------- API 타입 정의 ----------------
@@ -63,17 +69,13 @@ type ResultItem = {
 };
 
 export type AiRecommendFilters = {
-  skills: string;
-  interests: string;
-  availability: string;
-  teamSize: number | null;
-  note: string;
-  desiredRole: string;
-  collabMode: string;
-  experienceLevel: string;
-  preferredYearMin: number | null;
-  preferredYearMax: number | null;
-  priority: 'balanced' | 'skills' | 'time' | 'style';
+  skills: string;               // posts.skills
+  interests: string;            // posts.interests
+  availability: string;         // posts.available
+  desiredRole: string;          // posts.interests.position 등 역할 관련
+  experienceLevel: string;      // posts.experience.level
+  preferredYearMin: number | null; // profiles.year 최소
+  preferredYearMax: number | null; // profiles.year 최대
 };
 
 export default function AIRecommend() {
@@ -81,18 +83,12 @@ export default function AIRecommend() {
   const [skills, setSkills] = useState(''); // 원하는 기술 / 스택 (쉼표 구분 문자열)
   const [interests, setInterests] = useState(''); // 관심 분야
   const [availability, setAvailability] = useState(''); // 가능 시간 / 요일
-  const [teamSize, setTeamSize] = useState<number | ''>(''); // 희망 팀 규모
-  const [note, setNote] = useState(''); // 기타 메모
 
-  // 추가 조건: 역할/포지션, 협업 방식, 경험 수준, 선호 학년 범위, 우선순위
+  // 추가 조건: 역할/포지션, 팀원 경험 수준, 선호 학년 범위
   const [desiredRole, setDesiredRole] = useState(''); // 원하는 역할/포지션
-  const [collabMode, setCollabMode] = useState(''); // 협업 방식 (online/offline/hybrid)
   const [experienceLevel, setExperienceLevel] = useState(''); // 팀원 경험 수준
   const [preferredYearMin, setPreferredYearMin] = useState<number | ''>(''); // 선호 학년 최소
   const [preferredYearMax, setPreferredYearMax] = useState<number | ''>(''); // 선호 학년 최대
-  const [priority, setPriority] = useState<'balanced' | 'skills' | 'time' | 'style'>(
-    'balanced'
-  ); // 무엇이 더 중요한가?
 
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<ResultItem[]>([]);
@@ -116,14 +112,10 @@ export default function AIRecommend() {
           skills,
           interests,
           availability,
-          teamSize: teamSize === '' ? null : teamSize,
-          note,
           desiredRole,
-          collabMode,
           experienceLevel,
           preferredYearMin: preferredYearMin === '' ? null : preferredYearMin,
           preferredYearMax: preferredYearMax === '' ? null : preferredYearMax,
-          priority,
         },
       } as const;
 
@@ -209,7 +201,7 @@ export default function AIRecommend() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* 기본 조건: 기술, 관심 분야, 시간, 팀 규모 */}
+          {/* 기본 조건: 기술, 관심 분야, 시간 */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* 원하는 기술/스택 */}
             <div className="space-y-2">
@@ -224,7 +216,7 @@ export default function AIRecommend() {
 
             {/* 관심 분야 */}
             <div className="space-y-2">
-              <Label htmlFor="interests">관심 분야</Label>
+              <Label htmlFor="interests">카테고리 / 포지션</Label>
               <Input
                 id="interests"
                 placeholder="예: 추천시스템, 교육, 헬스케어"
@@ -235,30 +227,22 @@ export default function AIRecommend() {
 
             {/* 가능 시간/요일 */}
             <div className="space-y-2">
-              <Label htmlFor="availability">가능 시간/요일</Label>
-              <Input
-                id="availability"
-                placeholder="예: 화/목 저녁, 주말 낮"
+              <Label htmlFor="availability">가능한 시간대</Label>
+              <Select
                 value={availability}
-                onChange={(e) => setAvailability(e.target.value)}
-              />
+                onValueChange={setAvailability}
+              >
+                <SelectTrigger id="availability" className="w-full">
+                  <SelectValue placeholder="선택하세요" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="weekday_evening">주중(월-금) 저녁 위주</SelectItem>
+                  <SelectItem value="weekend">주말 위주</SelectItem>
+                  <SelectItem value="flexible">상관없음 / 유동적</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            {/* 희망 팀 규모 */}
-            <div className="space-y-2">
-              <Label htmlFor="teamSize">희망 팀 규모</Label>
-              <Input
-                id="teamSize"
-                type="number"
-                min={1}
-                max={10}
-                placeholder="예: 4"
-                value={teamSize}
-                onChange={(e) =>
-                  setTeamSize(e.target.value === '' ? '' : Number(e.target.value))
-                }
-              />
-            </div>
 
             {/* 원하는 역할/포지션 */}
             <div className="space-y-2">
@@ -271,36 +255,23 @@ export default function AIRecommend() {
               />
             </div>
 
-            {/* 선호 협업 방식 */}
-            <div className="space-y-2">
-              <Label htmlFor="collabMode">선호 협업 방식</Label>
-              <select
-                id="collabMode"
-                className="w-full border border-input bg-background px-3 py-2 rounded-md text-sm"
-                value={collabMode}
-                onChange={(e) => setCollabMode(e.target.value)}
-              >
-                <option value="">상관없음</option>
-                <option value="online">온라인 위주</option>
-                <option value="offline">오프라인 위주</option>
-                <option value="hybrid">온라인/오프라인 혼합</option>
-              </select>
-            </div>
 
             {/* 원하는 팀원 경험 수준 */}
             <div className="space-y-2">
               <Label htmlFor="experienceLevel">원하는 팀원 경험 수준</Label>
-              <select
-                id="experienceLevel"
-                className="w-full border border-input bg-background px-3 py-2 rounded-md text-sm"
+              <Select
                 value={experienceLevel}
-                onChange={(e) => setExperienceLevel(e.target.value)}
+                onValueChange={setExperienceLevel}
               >
-                <option value="">상관없음</option>
-                <option value="beginner">입문자 위주</option>
-                <option value="mixed">실력 혼합</option>
-                <option value="advanced">경험자 위주</option>
-              </select>
+                <SelectTrigger id="experienceLevel" className="w-full">
+                  <SelectValue placeholder="상관없음" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="beginner">초급 (1년 미만)</SelectItem>
+                  <SelectItem value="intermediate">중급 (1-3년)</SelectItem>
+                  <SelectItem value="advanced">고급 (3년 이상)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* 선호 학년 범위 */}
@@ -335,36 +306,8 @@ export default function AIRecommend() {
               </div>
             </div>
 
-            {/* 우선순위 선택 */}
-            <div className="space-y-2">
-              <Label htmlFor="priority">무엇이 더 중요한가요?</Label>
-              <select
-                id="priority"
-                className="w-full border border-input bg-background px-3 py-2 rounded-md text-sm"
-                value={priority}
-                onChange={(e) =>
-                  setPriority(e.target.value as 'balanced' | 'skills' | 'time' | 'style')
-                }
-              >
-                <option value="balanced">균형적으로</option>
-                <option value="skills">기술/역할이 가장 중요</option>
-                <option value="time">시간/일정이 가장 중요</option>
-                <option value="style">성향/분위기가 가장 중요</option>
-              </select>
-            </div>
           </div>
 
-          {/* 기타 메모 (선택 입력) */}
-          <div className="space-y-2">
-            <Label htmlFor="note">기타 메모 (선택)</Label>
-            <Textarea
-              id="note"
-              rows={3}
-              placeholder="선호하는 협업 방식, 도구, 일정 제약 등"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-            />
-          </div>
 
           {/* 추천 버튼 */}
           <div className="flex justify-end">
@@ -402,7 +345,7 @@ export default function AIRecommend() {
 
                   return (
                     <div
-                      key={r.id}
+                      key={`${r.method}-${r.id}`}
                       className="border rounded-lg p-4 hover:bg-muted/30 transition-colors"
                     >
                       <div className="flex items-center justify-between gap-4">

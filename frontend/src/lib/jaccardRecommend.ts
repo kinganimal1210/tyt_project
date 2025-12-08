@@ -3,17 +3,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type AiRecommendFilters = {
-  skills: string;
-  interests: string;
-  availability: string;
-  teamSize: number | null;
-  note: string;
-  desiredRole: string;
-  collabMode: string;
-  experienceLevel: string;
-  preferredYearMin: number | null;
-  preferredYearMax: number | null;
-  priority: 'balanced' | 'skills' | 'time' | 'style';
+  skills: string;               // 희망 기술 / 스택
+  interests: string;            // 관심 분야 / 카테고리
+  availability: string;         // 가능한 시간대 코드 ('' | 'weekday_evening' | 'weekend' | 'flexible')
+  desiredRole: string;          // 원하는 역할 / 포지션 (현재 Jaccard에서는 직접 사용 X, ANN 등에서 활용 가능)
+  experienceLevel: string;      // 원하는 팀원 경험 수준 코드 ('' | 'beginner' | 'intermediate' | 'advanced')
+  preferredYearMin: number | null; // 선호 학년 최소 (null이면 제한 없음)
+  preferredYearMax: number | null; // 선호 학년 최대 (null이면 제한 없음)
 };
 
 // ---- 타입 정의 ----
@@ -133,23 +129,7 @@ export function recommendByJaccardFromPosts(
 ): RecommendResult[] {
   const results: RecommendResult[] = [];
 
-  let skillWeight = 1;
-  let timeWeight = 1;
-  let styleWeight = 1;
-  switch (filters?.priority) {
-    case 'skills':
-      skillWeight = 1.2;
-      break;
-    case 'time':
-      timeWeight = 1.2;
-      break;
-    case 'style':
-      styleWeight = 1.2;
-      break;
-    case 'balanced':
-    default:
-      break;
-  }
+  // priority 관련 가중치 로직 제거
 
   // 사용자가 AI 추천 모드에서 입력한 조건을 우선적으로 사용하고,
   // 비어 있으면 mePost(내가 올린 글)의 정보를 fallback으로 사용한다.
@@ -168,10 +148,7 @@ export function recommendByJaccardFromPosts(
       ? (filters.availability as Json)
       : mePost.available;
 
-  const queryPersonality: Json | null =
-    filters && filters.collabMode && filters.collabMode.trim().length > 0
-      ? (filters.collabMode as Json)
-      : mePost.personality;
+  const queryPersonality: Json | null = mePost.personality;
 
   const queryExperience: Json | null =
     filters && filters.experienceLevel && filters.experienceLevel.trim().length > 0
@@ -187,13 +164,13 @@ export function recommendByJaccardFromPosts(
     const personalityScore = jaccard(queryPersonality, p.personality);
     const experienceScore = jaccard(queryExperience, p.experience);
 
-    // 가중치는 필요에 따라 조정
+    // 단순 고정 가중치로 변경
     const score =
-      0.4 * skillScore * skillWeight +
-      0.3 * interestScore * skillWeight +
-      0.1 * availableScore * timeWeight +
-      0.1 * personalityScore * styleWeight +
-      0.1 * experienceScore * skillWeight;
+      0.4 * skillScore +
+      0.3 * interestScore +
+      0.1 * availableScore +
+      0.1 * personalityScore +
+      0.1 * experienceScore;
 
     if (score <= 0) continue;
 

@@ -10,6 +10,7 @@ interface Profile {
   title: string;
   description: string;
   category: string;
+  interests?: { category?: string; [key: string]: any };
   position: string;
   experience: string;
   contact: string;
@@ -148,7 +149,10 @@ export default function Dashboard({ profiles = mockProfiles, onChatStart, onFeed
 
   const getCategoryCount = (category: string) => {
     if (category === 'all') return profiles.length;
-    return profiles.filter(p => p.category === category).length;
+    return profiles.filter((p) => {
+      const profileCategory = p.category ?? (p as any).interests?.category;
+      return profileCategory === category;
+    }).length;
   };
 
   return (

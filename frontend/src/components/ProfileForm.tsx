@@ -55,6 +55,16 @@ export default function ProfileForm({
       ? initialData.experience
       : initialData?.experience?.level;
 
+  const initialAvailable: string | undefined =
+    typeof initialData?.available === 'string'
+      ? initialData.available
+      : initialData?.available?.type;
+
+  const initialPersonality: string | undefined =
+    typeof initialData?.personality === 'string'
+      ? initialData.personality
+      : initialData?.personality?.style;
+
   // --- 모든 필드를 state로 관리 ---
   const [title, setTitle] = useState<string>(initialData?.title ?? '');
   const [description, setDescription] = useState<string>(
@@ -70,6 +80,11 @@ export default function ProfileForm({
     useState<string | undefined>(initialPosition);
   const [selectedExperience, setSelectedExperience] =
     useState<string | undefined>(initialExperience);
+
+  const [selectedAvailability, setSelectedAvailability] =
+    useState<string | undefined>(initialAvailable);
+  const [selectedPersonality, setSelectedPersonality] =
+    useState<string | undefined>(initialPersonality);
 
   const [skills, setSkills] = useState<string[]>(initialData?.skills || []);
   const [skillInput, setSkillInput] = useState('');
@@ -101,9 +116,21 @@ export default function ProfileForm({
         ? initialData.experience
         : initialData?.experience?.level;
 
+    const avail =
+      typeof initialData?.available === 'string'
+        ? initialData.available
+        : initialData?.available?.type;
+
+    const pers =
+      typeof initialData?.personality === 'string'
+        ? initialData.personality
+        : initialData?.personality?.style;
+
     setSelectedCategory(cat);
     setSelectedPosition(pos);
     setSelectedExperience(exp);
+    setSelectedAvailability(avail);
+    setSelectedPersonality(pers);
   }, [initialData]);
 
   const addSkill = () => {
@@ -137,6 +164,8 @@ export default function ProfileForm({
       category: selectedCategory ?? '',
       position: selectedPosition ?? '',
       experience: selectedExperience ?? '',
+      available: selectedAvailability ?? '',
+      personality: selectedPersonality ?? '',
       contact,
       skills,
       projects,
@@ -168,6 +197,12 @@ export default function ProfileForm({
           },
           experience: profile.experience
             ? { level: profile.experience }
+            : null,
+          available: profile.available
+            ? { type: profile.available }
+            : null,
+          personality: profile.personality
+            ? { style: profile.personality }
             : null,
           contact: profile.contact,
           created_at: profile.created_at,
@@ -305,6 +340,60 @@ export default function ProfileForm({
                   </SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* 가능한 시간대 & 협업 스타일 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* 가능한 시간대 */}
+              <div className="space-y-2">
+                <Label htmlFor="available">가능한 시간대</Label>
+                <Select
+                  value={selectedAvailability}
+                  onValueChange={setSelectedAvailability}
+                >
+                  <SelectTrigger id="available">
+                    <SelectValue placeholder="선택하세요" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="weekday_evening">
+                      주중(월-금) 저녁 위주
+                    </SelectItem>
+                    <SelectItem value="weekend">
+                      주말 위주
+                    </SelectItem>
+                    <SelectItem value="flexible">
+                      상관없음 / 유동적
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* 협업 스타일(성향) */}
+              <div className="space-y-2">
+                <Label htmlFor="personality">협업 스타일(성향)</Label>
+                <Select
+                  value={selectedPersonality}
+                  onValueChange={setSelectedPersonality}
+                >
+                  <SelectTrigger id="personality">
+                    <SelectValue placeholder="선택하세요" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="quiet_steady">
+                      차분하지만 꾸준한 스타일
+                    </SelectItem>
+                    <SelectItem value="proactive_leader">
+                      적극적으로 리딩하는 스타일
+                    </SelectItem>
+                    <SelectItem value="humorous">
+                      유머러스하고 분위기 메이커
+                    </SelectItem>
+                    <SelectItem value="detail_oriented">
+                      꼼꼼하고 디테일을 중시
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             {/* 보유 기술 */}

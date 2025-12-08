@@ -1,17 +1,23 @@
 // frontend/src/components/ChatSystem.tsx
-// [수정] DM 전용 채팅 컴포넌트 (global-chat 없음)
+// 채팅 목록 + 1:1 DM 채팅 UI
 
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import io, { Socket } from 'socket.io-client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
 import { X, Send, Users } from 'lucide-react';
 
-// ★ 추가: Supabase 클라이언트
 import { supabase } from '@/lib/supabaseClient';
 
 interface Message {
@@ -29,20 +35,30 @@ interface UserInfo {
   year?: number;
 }
 
+interface Conversation {
+  chatId: string;
+  otherUser: UserInfo;
+  lastMessage?: string;
+  lastAt?: string;
+  unreadCount: number;
+}
+
 interface ChatSystemProps {
   onClose: () => void;
   currentUser: UserInfo;
-  initialChat: any;         // [중요] page.tsx에서 넘겨주는 target(=프로필/author 객체)
+  initialChat?: any; // 피드/프로필에서 넘겨주는 author 객체 (옵션)
   onNewMessage?: () => void;
 }
 
-// [수정] 두 유저 uuid로 항상 동일한 DM 방 ID 생성
+// 두 유저 uuid로 항상 동일한 DM 방 ID 생성
 const makeDmChatId = (a: string, b: string) =>
   `dm:${[a, b].sort().join('_')}`;
 
-// 서버 row → Message
+// Supabase Messages row → Message
 function fromSupabaseRow(row: any, meId: string): Message {
-  const id = String(row.id ?? `${row.sender_id}-${row.created_at ?? Date.now()}`);
+  const id = String(
+    row.id ?? `${row.sender_id}-${row.created_at ?? Date.now()}`
+  );
   const text = String(row.content ?? '');
   const senderId = String(row.sender_id ?? '');
   const ts =
@@ -67,56 +83,182 @@ export default function ChatSystem({
   initialChat,
   onNewMessage,
 }: ChatSystemProps) {
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeConversation, setActiveConversation] =
+    useState<Conversation | null>(null);
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
 
-  // [수정] initialChat에서 상대 정보 뽑기 (profile.author 또는 profile 자체)
-  const otherUser: UserInfo | null = useMemo(() => {
-    if (!initialChat) return null;
-    const src = initialChat.author ?? initialChat;
-
-    if (!src?.id) {
-      console.warn('[ChatSystem] initialChat에 id가 없습니다.', initialChat);
-      return null;
-    }
-
-    return {
-      id: src.id,
-      name: src.name ?? src.nickname ?? '상대방',
-      department: src.department ?? src.major,
-      year:
-        typeof src.year === 'number'
-          ? src.year
-          : typeof src.grade === 'number'
-          ? src.grade
-          : undefined,
-    };
-  }, [initialChat]);
-
-  // [수정] DM 방 ID
-  const chatId = useMemo(() => {
-    if (!otherUser) return null;
-    return makeDmChatId(currentUser.id, otherUser.id);
-  }, [currentUser.id, otherUser]);
+  const activeChatId = activeConversation?.chatId ?? null;
+  const activeOtherUser = activeConversation?.otherUser ?? null;
 
   const SERVER_URL = useMemo(
     () => process.env.NEXT_PUBLIC_CHAT_SERVER_URL ?? 'http://localhost:4000',
     []
   );
 
-  // ★ 추가: Supabase에서 이전 메시지 불러오기
-  useEffect(() => {
-    if (!chatId) return;
+  /* ------------------------------------------------------------------ */
+  /* 1. 대화 목록 불러오기 (Messages + profiles)                         */
+  /* ------------------------------------------------------------------ */
 
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      // 1) 내가 참여한 모든 DM 메시지 가져오고 chat_id 로 그룹핑
+      const { data, error } = await supabase
+        .from('Messages')
+        .select('chat_id, sender_id, content, created_at')
+        .like('chat_id', `%${currentUser.id}%`)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('[ChatSystem] load conversations error', error);
+        return;
+      }
+      if (!data || cancelled) return;
+
+      type ConvBase = {
+        chatId: string;
+        otherUserId: string;
+        lastMessage: string;
+        lastAt: string;
+      };
+
+      const convMap = new Map<string, ConvBase>();
+
+      for (const row of data) {
+        const chatId: string = row.chat_id ?? '';
+        if (!chatId) continue;
+
+        const ids = chatId.replace(/^dm:/, '').split('_');
+        const otherUserId =
+          ids.find((id) => id !== currentUser.id) ?? ids[0] ?? '';
+
+        const createdAt: string =
+          row.created_at ??
+          new Date().toISOString(); /* timestamptz string 이라고 가정 */
+        const last = convMap.get(chatId);
+
+        if (!last || createdAt > last.lastAt) {
+          convMap.set(chatId, {
+            chatId,
+            otherUserId,
+            lastMessage: String(row.content ?? ''),
+            lastAt: createdAt,
+          });
+        }
+      }
+
+      const baseConvs = Array.from(convMap.values());
+      const userIds = [
+        ...new Set(baseConvs.map((c) => c.otherUserId).filter(Boolean)),
+      ];
+
+      // 2) 상대 프로필 정보 가져오기
+      let profileMap = new Map<string, any>();
+      if (userIds.length > 0) {
+        const { data: profileRows, error: pError } = await supabase
+          .from('profiles')
+          .select('id, name, department, year')
+          .in('id', userIds);
+
+        if (pError) {
+          console.error('[ChatSystem] load profile error', pError);
+        }
+        if (profileRows) {
+          profileMap = new Map(profileRows.map((p) => [p.id, p]));
+        }
+      }
+
+      let conversations: Conversation[] = baseConvs.map((c) => {
+        const p = profileMap.get(c.otherUserId);
+        const otherUser: UserInfo = {
+          id: c.otherUserId,
+          name: p?.name ?? '알 수 없음',
+          department: p?.department ?? undefined,
+          year: p?.year ?? undefined,
+        };
+        return {
+          chatId: c.chatId,
+          otherUser,
+          lastMessage: c.lastMessage,
+          lastAt: c.lastAt,
+          unreadCount: 0, // 추후 읽음 처리 추가 가능
+        };
+      });
+
+      // 3) initialChat 이 있으면 해당 상대와의 DM 방을 맨 위로/선택
+      let initialConv: Conversation | null = null;
+      if (initialChat) {
+        const src = initialChat.author ?? initialChat;
+        if (src?.id) {
+          const otherUser: UserInfo = {
+            id: src.id,
+            name: src.name ?? src.nickname ?? '상대방',
+            department: src.department ?? src.major,
+            year:
+              typeof src.year === 'number'
+                ? src.year
+                : typeof src.grade === 'number'
+                ? src.grade
+                : undefined,
+          };
+          const chatId = makeDmChatId(currentUser.id, otherUser.id);
+
+          initialConv =
+            conversations.find((c) => c.chatId === chatId) ??
+            ({
+              chatId,
+              otherUser,
+              lastMessage: '',
+              lastAt: new Date().toISOString(),
+              unreadCount: 0,
+            } as Conversation);
+
+          if (!conversations.some((c) => c.chatId === chatId)) {
+            conversations = [initialConv, ...conversations];
+          } else {
+            // 이미 있던 방이면 맨 앞으로 옮겨도 됨
+            conversations = [
+              initialConv,
+              ...conversations.filter((c) => c.chatId !== chatId),
+            ];
+          }
+        }
+      }
+
+      if (!cancelled) {
+        setConversations(conversations);
+        if (initialConv) {
+          setActiveConversation(initialConv);
+        } else if (conversations.length > 0) {
+          setActiveConversation(conversations[0]);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser.id, initialChat]);
+
+  /* ------------------------------------------------------------------ */
+  /* 2. 선택된 대화방의 메시지 히스토리 로딩                           */
+  /* ------------------------------------------------------------------ */
+
+  useEffect(() => {
+    if (!activeChatId) return;
     let cancelled = false;
 
     (async () => {
       const { data, error } = await supabase
-        .from('Messages')                // 테이블 이름 그대로 사용
+        .from('Messages')
         .select('*')
-        .eq('chat_id', chatId)           // 같은 방의 메시지들
+        .eq('chat_id', activeChatId)
         .order('created_at', { ascending: true });
 
       if (error) {
@@ -125,10 +267,10 @@ export default function ChatSystem({
       }
       if (!data || cancelled) return;
 
-      setMessages(prev => {
-        const history = data.map(row => fromSupabaseRow(row, currentUser.id));
-
-        // 소켓으로 이미 들어온 메시지가 있을 수 있으니 merge + dedupe
+      setMessages((prev) => {
+        const history = data.map((row) =>
+          fromSupabaseRow(row, currentUser.id)
+        );
         const map = new Map<string, Message>();
         for (const m of [...history, ...prev]) {
           map.set(m.id, m);
@@ -142,14 +284,14 @@ export default function ChatSystem({
     return () => {
       cancelled = true;
     };
-  }, [chatId, currentUser.id]);
+  }, [activeChatId, currentUser.id]);
 
-  // [수정] 소켓 연결 & DM 방 join (global-chat 안 씀)
+  /* ------------------------------------------------------------------ */
+  /* 3. socket.io 연결 & 선택된 DM 방 join                              */
+  /* ------------------------------------------------------------------ */
+
   useEffect(() => {
-    if (!chatId) {
-      console.warn('[ChatSystem] chatId가 없습니다. DM 방에 join할 수 없습니다.');
-      return;
-    }
+    if (!activeChatId || !activeOtherUser) return;
 
     const s = io(SERVER_URL, {
       transports: ['websocket', 'polling'],
@@ -162,20 +304,37 @@ export default function ChatSystem({
 
     s.on('connect', () => {
       console.log('[socket] connected', s.id);
-      console.log('[socket] join DM room', chatId, 'as', currentUser.id);
-      s.emit('join', { chatId, userId: currentUser.id });
+      console.log(
+        '[socket] join DM room',
+        activeChatId,
+        'as',
+        currentUser.id
+      );
+      s.emit('join', { chatId: activeChatId, userId: currentUser.id });
     });
 
-    // 서버에서 Messages row 그대로 내려준다고 가정
     s.on('chat:message', (row: any) => {
       const rowChatId: string = row.chat_id ?? '';
-      if (rowChatId !== chatId) return; // 이 DM 방이 아닌 메시지는 무시
+      if (rowChatId !== activeChatId) return;
 
       const msg = fromSupabaseRow(row, currentUser.id);
-      setMessages(prev => {
-        if (prev.some(m => m.id === msg.id)) return prev;
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === msg.id)) return prev;
         return [...prev, msg];
       });
+
+      // 대화 목록의 lastMessage 업데이트
+      setConversations((prev) =>
+        prev.map((conv) =>
+          conv.chatId === rowChatId
+            ? {
+                ...conv,
+                lastMessage: msg.text,
+              }
+            : conv
+        )
+      );
+
       if (onNewMessage) onNewMessage();
     });
 
@@ -191,123 +350,222 @@ export default function ChatSystem({
       s.disconnect();
       socketRef.current = null;
     };
-  }, [SERVER_URL, chatId, currentUser.id, onNewMessage]);
+  }, [SERVER_URL, activeChatId, activeOtherUser, currentUser.id, onNewMessage]);
 
-  // 메시지 바뀔 때 맨 아래로 스크롤
+  /* ------------------------------------------------------------------ */
+  /* 4. 메시지 변경 시 스크롤 맨 아래로                                  */
+  /* ------------------------------------------------------------------ */
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    messagesEndRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'end',
+    });
   }, [messages]);
+
+  /* ------------------------------------------------------------------ */
+  /* 5. 메시지 전송                                                      */
+  /* ------------------------------------------------------------------ */
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !chatId) return;
+    if (!newMessage.trim() || !activeChatId) return;
+
     const text = newMessage.trim();
     const s = socketRef.current;
     if (!s) return;
 
     setNewMessage('');
 
-    console.log('[send] to', chatId, 'text =', text);
+    console.log('[send] to', activeChatId, 'text =', text);
 
-    // 서버에서 이 payload를 받아서 Supabase Messages에 insert + row 다시 emit
     s.emit('chat:message', {
-      chatId,
+      chatId: activeChatId,
       senderId: currentUser.id,
       content: text,
     });
 
-    if (onNewMessage) onNewMessage && onNewMessage();
+    if (onNewMessage) onNewMessage();
   };
 
-  // 상대 정보가 없으면 에러 표시
-  if (!otherUser || !chatId) {
-    return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>채팅을 열 수 없습니다</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              상대 정보(initialChat)에 id가 없어서 DM 방을 만들 수 없습니다.
-              피드/프로필에서 다시 채팅을 열어보세요.
-            </p>
-            <Button onClick={onClose}>닫기</Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  /* ------------------------------------------------------------------ */
+  /* 6. UI                                                              */
+  /* ------------------------------------------------------------------ */
+
+  const currentChat = activeConversation;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <Card className="w-full max-w-2xl h-[80vh] flex flex-col">
-        <CardHeader className="space-y-0 pb-4">
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              {otherUser.name}
-            </CardTitle>
-            <Button variant="ghost" size="sm" onClick={onClose} className="p-1 hover:bg-muted">
-              <X className="h-5 w-5" />
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            {otherUser.department ?? '미입력'} {otherUser.year ?? 1}학년 {otherUser.name}님과의 1:1 채팅입니다.
-          </p>
+      <Card className="relative w-full max-w-5xl h-[80vh] flex flex-col">
+        {/* 상단 닫기 버튼 (오른쪽 위 고정) */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onClose}
+          className="absolute right-4 top-4 rounded-xl p-2 shadow-none hover:bg-muted hover:shadow-md transition-colors transition-shadow"
+        >
+          <X className="h-4 w-4" />
+        </Button>
+        <CardHeader className="flex-row items-center space-y-0 pb-4 pr-10">
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            채팅
+          </CardTitle>
         </CardHeader>
 
-        <CardContent className="flex-1 flex flex-col min-h-0">
-          {/* 메시지 리스트 */}
-          <div className="flex-1 overflow-y-auto pr-2">
-            <div className="space-y-3">
-              {messages.map((m) => (
+        <CardContent className="flex-1 flex gap-4 min-h-0">
+          {/* 왼쪽: 대화 목록 */}
+          <div className="w-80 border-r space-y-2">
+            <h3 className="font-medium mb-3">대화 목록</h3>
+            <ScrollArea className="h-full">
+              {conversations.length === 0 && (
+                <div className="text-xs text-muted-foreground px-2 py-1">
+                  아직 대화가 없습니다.
+                </div>
+              )}
+              {conversations.map((conv) => (
                 <div
-                  key={m.id}
-                  className={`flex ${m.isMe ? 'justify-end' : 'justify-start'}`}
+                  key={conv.chatId}
+                  onClick={() => {
+                    setActiveConversation(conv);
+                    // 읽음 처리 추가 시 여기서 unreadCount 0으로 초기화
+                    setConversations((prev) =>
+                      prev.map((c) =>
+                        c.chatId === conv.chatId
+                          ? { ...c, unreadCount: 0 }
+                          : c
+                      )
+                    );
+                    setMessages([]); // 다른 방으로 바뀌면 메시지 초기화 후 다시 로딩
+                  }}
+                  className={`p-3 rounded-lg cursor-pointer transition-colors ${
+                    activeChatId === conv.chatId
+                      ? 'bg-primary/10 border border-primary/20'
+                      : 'hover:bg-muted'
+                  }`}
                 >
-                  <div
-                    className={`max-w-[70%] rounded-lg px-3 py-2 ${
-                      m.isMe ? 'bg-primary text-primary-foreground' : 'bg-muted'
-                    }`}
-                  >
-                    <p className="text-sm">
-                      {m.isMe ? (
-                        <span className="font-semibold mr-2">나:</span>
-                      ) : (
-                        <span className="font-semibold mr-2">상대방:</span>
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback className="text-xs">
+                        {conv.otherUser.name.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <p className="font-medium text-sm truncate">
+                          {conv.otherUser.name}
+                        </p>
+                        {conv.unreadCount > 0 && (
+                          <Badge variant="destructive" className="text-xs">
+                            {conv.unreadCount}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {conv.otherUser.department ?? '미입력'}{' '}
+                        {conv.otherUser.year
+                          ? `${conv.otherUser.year}학년`
+                          : ''}
+                      </p>
+                      {conv.lastMessage && (
+                        <p className="text-xs text-muted-foreground truncate mt-1">
+                          {conv.lastMessage}
+                        </p>
                       )}
-                      {m.text}
-                    </p>
-                    <p
-                      className={`text-xs mt-1 ${
-                        m.isMe ? 'text-primary-foreground/70' : 'text-muted-foreground'
-                      }`}
-                    >
-                      {new Date(m.timestamp).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </p>
+                    </div>
                   </div>
                 </div>
               ))}
-              <div ref={messagesEndRef} />
-            </div>
+            </ScrollArea>
           </div>
 
-          {/* 입력창 */}
-          <form onSubmit={handleSendMessage} className="flex gap-2 mt-3">
-            <Input
-              value={newMessage}
-              onChange={e => setNewMessage(e.target.value)}
-              placeholder="메시지를 입력하세요..."
-              className="flex-1"
-            />
-            <Button type="submit" size="sm">
-              <Send className="h-4 w-4" />
-            </Button>
-          </form>
+          {/* 오른쪽: 선택된 대화의 메시지 */}
+          <div className="flex-1 flex flex-col min-h-0">
+            {currentChat && activeOtherUser ? (
+              <>
+                {/* 상단 상대 정보 */}
+                <div className="border-b pb-3 mb-4">
+                  <div className="flex items-center gap-3">
+                    <Avatar>
+                      <AvatarFallback>
+                        {activeOtherUser.name.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <h4 className="font-medium">
+                        {activeOtherUser.name}
+                      </h4>
+                      <p className="text-sm text-muted-foreground">
+                        {activeOtherUser.department ?? '미입력'}{' '}
+                        {activeOtherUser.year
+                          ? `${activeOtherUser.year}학년`
+                          : ''}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 메시지 리스트 */}
+                <div className="flex-1 overflow-y-auto pr-4">
+                  <div className="space-y-4">
+                    {messages.map((m) => (
+                      <div
+                        key={m.id}
+                        className={`flex ${
+                          m.isMe ? 'justify-end' : 'justify-start'
+                        }`}
+                      >
+                        <div
+                          className={`max-w-[70%] rounded-lg px-3 py-2 ${
+                            m.isMe
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-muted'
+                          }`}
+                        >
+                          <p className="text-sm">
+                            {m.text}
+                          </p>
+                          <p
+                            className={`text-xs mt-1 ${
+                              m.isMe
+                                ? 'text-primary-foreground/70'
+                                : 'text-muted-foreground'
+                            }`}
+                          >
+                            {new Date(m.timestamp).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                    <div ref={messagesEndRef} />
+                  </div>
+                </div>
+
+                {/* 입력창 */}
+                <form
+                  onSubmit={handleSendMessage}
+                  className="flex gap-2 mt-4"
+                >
+                  <Input
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    placeholder="메시지를 입력하세요..."
+                    className="flex-1"
+                  />
+                  <Button type="submit" size="sm">
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </form>
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center text-muted-foreground">
+                대화를 선택해주세요
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>

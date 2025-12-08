@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -18,28 +19,19 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Search, Filter } from 'lucide-react';
-
-// posts.interests JSON 타입
-type Interest = {
-  category?: string;   // 'club' | 'contest' | ...
-  position?: string;   // 'frontend' | 'backend' | 'fullstack' ...
-};
+import { MessageCircle, Search, Filter } from 'lucide-react';
 
 // 런타임에서 undefined가 들어와도 안 터지도록 대부분 optional
 interface Profile {
   id: string;
   title?: string;
   description?: string;
-
-  // 옛날 단일 컬럼
   category?: string;
-  position?: any;
-
-  // JSONB
-  interests?: Interest | Interest[];
-
-  experience?: any;
+  interests?: { category?: string; [key: string]: any };
+  position?: any;      // string 또는 { value, label } 같은 객체까지 허용
+  experience?: any;    // string 또는 { value, label }
+  available?: any;
+  personality?: any;
   contact?: string;
   skills?: string[];
   projects?: string[];
@@ -56,18 +48,18 @@ interface Profile {
 interface FeedListProps {
   profiles: Profile[];
   activeCategory: string;
-  onChatStart: (profile: Profile) => void; // 부모에서 여전히 넘기고 있을 수 있어서 타입은 유지
+  onChatStart: (profile: Profile) => void;
   onFeedClick: (profile: Profile) => void;
 }
 
-const categoryLabels: Record<string, string> = {
+const categoryLabels = {
   club: '동아리',
   capstone: '캡스톤',
   contest: '공모전',
   project: '프로젝트',
 };
 
-const positionLabels: Record<string, string> = {
+const positionLabels = {
   frontend: '프론트엔드',
   backend: '백엔드',
   fullstack: '풀스택',
@@ -77,10 +69,23 @@ const positionLabels: Record<string, string> = {
   pm: '기획/PM',
 };
 
-const experienceLabels: Record<string, string> = {
+const experienceLabels = {
   beginner: '초급',
   intermediate: '중급',
   advanced: '고급',
+};
+
+const availabilityLabels = {
+  weekday_evening: '주중 저녁 위주',
+  weekend: '주말 위주',
+  flexible: '상관없음 / 유동적',
+};
+
+const personalityLabels = {
+  quiet_steady: '차분하지만 꾸준한 스타일',
+  proactive_leader: '적극적으로 리딩하는 스타일',
+  humorous: '유머러스하고 분위기 메이커',
+  detail_oriented: '꼼꼼하고 디테일을 중시',
 };
 
 // 공통: 어떤 형태의 값이 와도 사람이 읽을 수 있는 문자열로 바꾸기
@@ -126,52 +131,8 @@ function normalizeEnum(
   return String(raw);
 }
 
-// ✅ categoryKey: interests → category → profile.category 순으로 가져오기
-function getCategoryKey(profile: Profile): string {
-  const interests = profile.interests;
-
-  if (Array.isArray(interests)) {
-    const first = interests[0];
-    if (first?.category) return first.category;
-  }
-
-  if (interests && !Array.isArray(interests) && typeof interests === 'object') {
-    const obj = interests as Interest;
-    if (obj.category) return obj.category;
-  }
-
-  if (profile.category) return profile.category;
-
-  return 'etc';
-}
-
-// ✅ positionKey: interests.position → profile.position(value) 순으로 가져오기
-function getPositionKey(profile: Profile): string | null {
-  const interests = profile.interests;
-
-  if (Array.isArray(interests)) {
-    const first = interests[0];
-    if (first?.position) return first.position;
-  }
-
-  if (interests && !Array.isArray(interests) && typeof interests === 'object') {
-    const obj = interests as Interest;
-    if (obj.position) return obj.position;
-  }
-
-  const raw = profile.position;
-  if (!raw) return null;
-
-  if (typeof raw === 'string') return raw;
-  if (typeof raw === 'object' && 'value' in raw) {
-    return String((raw as any).value);
-  }
-
-  return null;
-}
-
-// 경험 필터용 코드
-function getExperienceCode(raw: any): string | null {
+// 필터용: 코드(frontend, beginner 등)를 뽑는 함수
+function getPositionCode(raw: any): string | null {
   if (!raw) return null;
   if (typeof raw === 'string') return raw;
   if (typeof raw === 'object' && raw !== null && 'value' in raw) {
@@ -180,27 +141,88 @@ function getExperienceCode(raw: any): string | null {
   return null;
 }
 
+function getExperienceCode(raw: any): string | null {
+  if (!raw) return null;
+  if (typeof raw === 'string') return raw;
+  if (typeof raw === 'object' && raw !== null) {
+    if ('value' in raw) return String((raw as any).value);
+    if ('level' in raw) return String((raw as any).level);
+  }
+  return null;
+}
+
+function getAvailabilityCode(raw: any): string | null {
+  if (!raw) return null;
+  if (typeof raw === 'string') return raw;
+  if (typeof raw === 'object' && raw !== null) {
+    if ('value' in raw) return String((raw as any).value);
+    if ('type' in raw) return String((raw as any).type);
+  }
+  return null;
+}
+
+function getPersonalityCode(raw: any): string | null {
+  if (!raw) return null;
+  if (typeof raw === 'string') return raw;
+  if (typeof raw === 'object' && raw !== null) {
+    if ('value' in raw) return String((raw as any).value);
+    if ('style' in raw) return String((raw as any).style);
+  }
+  return null;
+}
+
+// 카테고리 값 정규화: 한글/영문을 통일된 코드로 변환
+function normalizeCategoryCode(raw?: string | null): string {
+  if (!raw) return 'all';
+
+  switch (raw) {
+    case 'all':
+    case '전체':
+      return 'all';
+
+    case 'club':
+    case '동아리':
+      return 'club';
+
+    case 'capstone':
+    case '캡스톤':
+      return 'capstone';
+
+    case 'contest':
+    case '공모전':
+      return 'contest';
+
+    case 'project':
+    case '프로젝트':
+      return 'project';
+
+    default:
+      return raw;
+  }
+}
+
 export default function FeedList({
   profiles,
   activeCategory,
-  onChatStart, // 현재는 사용 안 하지만 부모 props 위해 유지
+  onChatStart,
   onFeedClick,
 }: FeedListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [positionFilter, setPositionFilter] = useState('all');
   const [experienceFilter, setExperienceFilter] = useState('all');
 
-  // onChatStart가 미사용 오류 나지 않도록 더미 사용
-  void onChatStart;
-
   // 필터 로직
   const filteredProfiles = profiles.filter((profile) => {
-    const categoryKey = getCategoryKey(profile);
-    const posCode = getPositionKey(profile) ?? 'all';
+    const profileCategory = normalizeCategoryCode(profile.category ?? profile.interests?.category ?? null);
+    const activeCat = normalizeCategoryCode(activeCategory);
+
+    const posCode = getPositionCode(
+      profile.position ?? profile.interests?.position,
+    ) ?? 'all';
     const expCode = getExperienceCode(profile.experience) ?? 'all';
 
     const matchesCategory =
-      activeCategory === 'all' || categoryKey === activeCategory;
+      activeCat === 'all' || profileCategory === activeCat;
 
     const title = (profile.title ?? '').toLowerCase();
     const description = (profile.description ?? '').toLowerCase();
@@ -303,16 +325,30 @@ export default function FeedList({
               new Date().toISOString();
             const createdAtLabel = new Date(createdAtRaw).toLocaleDateString();
 
-            const categoryKey = profile.category as keyof typeof categoryLabels;
+            const categoryKey = normalizeCategoryCode(
+              profile.category ?? profile.interests?.category ?? null,
+            ) as keyof typeof categoryLabels;
 
             const positionLabel = normalizeEnum(
-              profile.position,
+              profile.position ?? profile.interests?.position,
               positionLabels,
               '미지정',
             );
             const experienceLabel = normalizeEnum(
-              profile.experience,
+              getExperienceCode(profile.experience),
               experienceLabels,
+              '미지정',
+            );
+
+            const availabilityLabel = normalizeEnum(
+              getAvailabilityCode(profile.available),
+              availabilityLabels,
+              '미지정',
+            );
+
+            const personalityLabel = normalizeEnum(
+              getPersonalityCode(profile.personality),
+              personalityLabels,
               '미지정',
             );
 
@@ -365,6 +401,17 @@ export default function FeedList({
                       </Badge>
                     </div>
 
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="font-medium">시간대:</span>
+                      <Badge variant="outline" className="text-xs">
+                        {availabilityLabel}
+                      </Badge>
+                      <span className="font-medium">스타일:</span>
+                      <Badge variant="outline" className="text-xs">
+                        {personalityLabel}
+                      </Badge>
+                    </div>
+
                     {/* 기술 스택 */}
                     <div>
                       <div className="text-xs font-medium mb-1">기술 스택:</div>
@@ -385,17 +432,35 @@ export default function FeedList({
                         )}
                       </div>
                     </div>
-                  )}
-                </div>
 
-                {/* 작성 날짜 */}
-                <div className="text-xs text-muted-foreground">
-                  {createdAtLabel}에 작성됨
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+                    {/* 프로젝트 */}
+                    {projects.length > 0 && (
+                      <div>
+                        <div className="text-xs font-medium mb-1">
+                          프로젝트:
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {projects.map((project) => (
+                            <Badge
+                              key={project}
+                              variant="outline"
+                              className="text-xs"
+                            >
+                              {project}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {createdAtLabel}에 작성됨
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       </div>
 
       {filteredProfiles.length === 0 && (
