@@ -13,7 +13,7 @@ import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { User, Mail, Phone, Calendar, MapPin, GraduationCap, Pencil, X } from 'lucide-react';
+import { User as UserIcon, Mail, Phone, Calendar, MapPin, GraduationCap, Pencil, X } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
 // ─────────────────────────────────────────────────────────
@@ -172,7 +172,7 @@ export default function UserProfileModal({ user, profiles, onClose, onFeedClick,
         // (user_id 컬럼으로 필터링, 최신 순 정렬)
         const { data, error } = await supabase
           .from('profiles_detail')
-          .select('user_id, title, description, skills, interests, experience, contact, created_at')
+          .select('id, user_id, title, description, skills, interests, experience, contact, created_at')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false });
 
@@ -182,7 +182,7 @@ export default function UserProfileModal({ user, profiles, onClose, onFeedClick,
 
         // 쿼리 결과(raw 데이터)를 화면에서 사용하기 쉬운 Profile 타입으로 변환
         const mapped: Profile[] = (data ?? []).map((row: any) => ({
-          id: row.user_id ?? user.id,
+          id: row.id ?? row.user_id ?? user.id,
           title: row.title ?? '',
           description: row.description ?? '',
           category: row.interests?.category ?? '',
@@ -250,7 +250,7 @@ export default function UserProfileModal({ user, profiles, onClose, onFeedClick,
             <div className="flex items-center gap-4 p-6 bg-gradient-to-r from-green-50 to-green-100 rounded-lg">
               <Avatar className="h-16 w-16">
                 <AvatarFallback className="bg-green-200 text-green-800">
-                  <User className="h-8 w-8" />
+                  <UserIcon className="h-8 w-8" />
                 </AvatarFallback>
               </Avatar>
               

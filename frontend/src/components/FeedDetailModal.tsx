@@ -201,6 +201,16 @@ function getPersonalityCode(raw: any): string | null {
   return null;
 }
 
+function getExperienceCode(raw: any): string | null {
+  if (!raw) return null;
+  if (typeof raw === 'string') return raw;
+  if (typeof raw === 'object' && raw !== null) {
+    if ('value' in raw) return String((raw as any).value);
+    if ('level' in raw) return String((raw as any).level);
+  }
+  return null;
+}
+
 export default function FeedDetailModal({
   profile,
   onClose,
@@ -231,7 +241,7 @@ export default function FeedDetailModal({
     : '미지정';
 
   const experienceLabel = normalizeEnum(
-    profile.experience,
+    getExperienceCode(profile.experience),
     experienceLabels,
     '미지정',
   );

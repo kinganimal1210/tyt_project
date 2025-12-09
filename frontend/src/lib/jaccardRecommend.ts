@@ -84,7 +84,7 @@ function toTagSet(src: Json | null): Set<string> {
 
   return new Set(
     list
-      .map((x) => x.trim())
+      .map((x) => x.trim().toLowerCase())
       .filter(Boolean)
   );
 }
@@ -124,7 +124,7 @@ export function jaccard(a: Json | null, b: Json | null): number {
 export function recommendByJaccardFromPosts(
   mePost: PostRow,
   candidates: PostRow[],
-  k: number = 20,
+  k: number = 4,
   filters?: AiRecommendFilters
 ): RecommendResult[] {
   const results: RecommendResult[] = [];
@@ -222,6 +222,6 @@ export async function getJaccardRecommendationsForUser(
 
   const candidates = posts.filter((p) => p.id !== mePost.id);
 
-  // 3. Jaccard 기반 점수 계산
-  return recommendByJaccardFromPosts(mePost, candidates, limit, filters);
+  // 3. Jaccard 기반 점수 계산 (항상 상위 4개만 리턴)
+  return recommendByJaccardFromPosts(mePost, candidates, 4, filters);
 }
