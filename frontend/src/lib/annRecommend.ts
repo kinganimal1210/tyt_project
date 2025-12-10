@@ -1,14 +1,7 @@
 // src/lib/annRecommend.ts
-//
-// ANN 기반 추천용 유틸
-// - posts / profiles / interactions 테이블을 이용해
+//  posts / profiles / interactions 테이블을 이용해
 //   사용자별 후보에 대한 feature 벡터를 만들고
 //   간단한 MLP(1 hidden layer)를 통해 점수를 계산한다.
-//
-// ⚠️ NOTE:
-// - interactions 테이블 이름은 실제 생성한 이름에 맞게
-//   getAnnRecommendationsForUser 내부의 from('interactions') 부분을
-//   필요하면 수정해서 사용한다.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Json, PostRow } from './jaccardRecommend';
@@ -18,13 +11,11 @@ export type AiRecommendFilters = {
   skills: string;               // 희망 기술 / 스택
   interests: string;            // 관심 분야 / 카테고리
   availability: string;         // 가능한 시간대 코드 ('' | 'weekday_evening' | 'weekend' | 'flexible')
-  desiredRole: string;          // 원하는 역할 / 포지션 (현재 ANN에서는 직접 사용 X, 확장 시 활용 가능)
+  desiredRole: string;          // 원하는 역할 / 포지션 ->현재사용안함
   experienceLevel: string;      // 원하는 팀원 경험 수준 코드 ('' | 'beginner' | 'intermediate' | 'advanced')
   preferredYearMin: number | null; // 선호 학년 최소 (null이면 제한 없음)
   preferredYearMax: number | null; // 선호 학년 최대 (null이면 제한 없음)
 };
-
-// ---------- 기본 타입 ----------
 
 export interface ProfileRow {
   id: string;
@@ -48,15 +39,15 @@ export interface AnnRecommendResult {
   featureNames: string[];  // 각 feature 이름
 }
 
-// ---------- ANN 구조 정의 ----------
+// ANN 구조 정의 
 
 export interface AnnWeights {
   inputSize: number;
   hiddenSize: number;
-  // W1: [hiddenSize][inputSize]
+  // W1
   W1: number[][];
   b1: number[]; // [hiddenSize]
-  // W2: [hiddenSize]  (출력 1개)
+  // W2
   W2: number[];
   b2: number;
 }
@@ -117,8 +108,7 @@ export function annPredictScore(x: number[], weights: AnnWeights): number {
   return sigmoid(yLinear);
 }
 
-// ---------- feature 구성 유틸 ----------
-
+// 현재사용안함
 interface InteractionStat {
   views: number;
   chats: number;
@@ -187,11 +177,9 @@ function buildFeatureVector(params: {
 }): number[] {
   const { meProfile, mePost, candProfile, candPost, candInteraction, filters } = params;
 
-  // ---------------------------
-  // 1) 쿼리(feature 기준) 구성
-  //    - AIRecommend.tsx에서 입력한 filters 값을 우선적으로 사용
-  //    - 비어 있으면 mePost(내가 올린 피드)의 정보를 fallback 으로 사용
-  // ---------------------------
+ 
+  //    AIRecommend.tsx에서 입력한 filters 값을 우선적으로 사용
+  //    비어 있으면 mePost(내가 올린 피드)의 정보를 fallback 으로 사용
   const querySkills: Json | null =
     filters && filters.skills && filters.skills.trim().length > 0
       ? (filters.skills as Json)
@@ -216,10 +204,8 @@ function buildFeatureVector(params: {
       ? (filters.experienceLevel as Json)
       : mePost.experience;
 
-  // ---------------------------
   // 2) Jaccard 기반 feature 계산
   //    - "입력 조건 vs 후보 post" 기준으로 유사도 계산
-  // ---------------------------
   const jSkillBase = jaccard(querySkills, candPost.skills);
   const jInterestBase = jaccard(queryInterests, candPost.interests);
   const jAvailBase = jaccard(queryAvailable, candPost.available);
@@ -280,7 +266,7 @@ function buildFeatureVector(params: {
   ];
 }
 
-// ---------- 메인: ANN 기반 추천 생성 ----------
+//  ANN 기반 추천 생성
 
 export async function getAnnRecommendationsForUser(
   supabase: SupabaseClient<any>,
@@ -321,9 +307,9 @@ export async function getAnnRecommendationsForUser(
     return [];
   }
 
-  // 3) interactions 로드 (from_user_id = userId)
+  // 3) interactions 
   const { data: interData, error: interError } = await supabase
-    .from('interactions') // ← 테이블 이름이 다르면 여기 수정
+    .from('interactions') 
     .select('from_user_id, to_user_id, action, created_at, meta')
     .eq('from_user_id', userId);
   if (interError) throw interError;
@@ -331,7 +317,7 @@ export async function getAnnRecommendationsForUser(
   const interactions = (interData ?? []) as InteractionRow[];
   const interStats = buildInteractionStats(interactions);
 
-  // 4) 후보 사용자들에 대해 feature → ANN 점수 계산
+  // 4) ANN 점수 계산
   const results: AnnRecommendResult[] = [];
 
   for (const candProfile of profiles) {

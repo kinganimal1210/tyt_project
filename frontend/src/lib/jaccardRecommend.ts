@@ -1,4 +1,4 @@
-// src/lib/jaccardRecommend.ts
+// src/lib/jaccardRecommend.ts 유사도알고리즘
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -52,8 +52,6 @@ export type RecommendResult = {
   targetPostId: string;    // == postId
 };
 
-// ---- 유틸: jsonb → Set<string> ----
-
 function toTagSet(src: Json | null): Set<string> {
   if (src === null || src === undefined) return new Set();
 
@@ -100,7 +98,7 @@ function intersectionSet(a: Json | null, b: Json | null): string[] {
   return result;
 }
 
-// ---- Jaccard 유사도 ----
+// Jaccard 유사도
 
 export function jaccard(a: Json | null, b: Json | null): number {
   const setA = toTagSet(a);
@@ -119,7 +117,7 @@ export function jaccard(a: Json | null, b: Json | null): number {
   return inter / unionSize; // 0 ~ 1
 }
 
-// ---- 포스트 배열에서 Jaccard 기반 추천 ----
+// 포스트 배열에서 Jaccard 기반 추천
 
 export function recommendByJaccardFromPosts(
   mePost: PostRow,
@@ -129,9 +127,7 @@ export function recommendByJaccardFromPosts(
 ): RecommendResult[] {
   const results: RecommendResult[] = [];
 
-  // priority 관련 가중치 로직 제거
-
-  // 사용자가 AI 추천 모드에서 입력한 조건을 우선적으로 사용하고,
+  // !중요 사용자가 AI 추천 모드에서 입력한 조건을 우선적으로 사용하고,
   // 비어 있으면 mePost(내가 올린 글)의 정보를 fallback으로 사용한다.
   const querySkills: Json | null =
     filters && filters.skills && filters.skills.trim().length > 0
@@ -197,7 +193,7 @@ export function recommendByJaccardFromPosts(
   return results.sort((a, b) => b.score - a.score).slice(0, k);
 }
 
-// ---- Supabase에서 DB 읽어서 추천 계산 ----
+// Supabase에서 DB 읽어서 추천 계산
 
 export async function getJaccardRecommendationsForUser(
   supabase: SupabaseClient<any>,
@@ -205,7 +201,7 @@ export async function getJaccardRecommendationsForUser(
   limit: number = 20,
   filters?: AiRecommendFilters
 ): Promise<RecommendResult[]> {
-  // 1. posts 전체 로드 (필요하면 where 조건 추가)
+  // 1. posts 전체 로드
   const { data, error } = await supabase
     .from('posts')
     .select('*')

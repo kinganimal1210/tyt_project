@@ -388,10 +388,7 @@ export default function ChatSystem({
     if (onNewMessage) onNewMessage();
   };
 
-  /* ------------------------------------------------------------------ */
-  /* 6. UI                                                              */
-  /* ------------------------------------------------------------------ */
-
+// UI
   const currentChat = activeConversation;
 
   return (
