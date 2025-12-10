@@ -195,8 +195,8 @@ export default function Dashboard({ profiles = mockProfiles, onChatStart, onFeed
             <FeedList
               profiles={profiles}
               activeCategory={category}
-              onChatStart={onChatStart}
-              onFeedClick={onFeedClick}
+              onChatStart={onChatStart as any}
+              onFeedClick={onFeedClick as any}
             />
           </TabsContent>
         ))}
