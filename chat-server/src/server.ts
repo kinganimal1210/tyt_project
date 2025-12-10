@@ -5,22 +5,38 @@ import cors from "cors";
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
 
+// 환경 변수 로드
 dotenv.config();
 
+// 허용된 프론트엔드 Origin 목록 (쉼표로 구분)
 const allowedOrigins = (process.env.FRONTEND_ORIGINS ?? "http://localhost:3000")
   .split(",")
   .map((o) => o.trim())
   .filter(Boolean);
 
 const app = express();
-app.use(cors({ origin: allowedOrigins, credentials: true }));
+
+// CORS 설정: 프론트엔드(로컬 + Vercel 도메인 등)에서 접근 허용
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+  })
+);
+
 app.get("/", (_req, res) => res.send("Socket server running"));
 
 const server = http.createServer(app);
+
+// Socket.io 서버에도 동일한 CORS 설정 적용
 const io = new Server(server, {
-  cors: { origin: allowedOrigins, credentials: true },
+  cors: {
+    origin: allowedOrigins,
+    credentials: true,
+  },
 });
 
+// Supabase 클라이언트 (Service Role 키 사용)
 const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -58,4 +74,6 @@ io.on("connection", (socket) => {
 });
 
 const PORT = process.env.PORT || 4000;
-server.listen(PORT, () => console.log(`🚀 Socket.io running on port ${PORT}`));
+server.listen(PORT, () =>
+  console.log(`🚀 Socket.io running on port ${PORT} (origins: ${allowedOrigins.join(", ")})`)
+);
