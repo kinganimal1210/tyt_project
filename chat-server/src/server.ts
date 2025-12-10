@@ -7,13 +7,18 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+const allowedOrigins = (process.env.FRONTEND_ORIGINS ?? "http://localhost:3000")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
 const app = express();
-app.use(cors({ origin: ["http://localhost:3000"], credentials: true }));
+app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.get("/", (_req, res) => res.send("Socket server running"));
 
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: ["http://localhost:3000"], credentials: true },
+  cors: { origin: allowedOrigins, credentials: true },
 });
 
 const supabase = createClient(
