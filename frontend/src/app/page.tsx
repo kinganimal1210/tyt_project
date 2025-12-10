@@ -244,13 +244,8 @@ export default function Home() {
           user={user}
           onLogout={handleLogout}
           onOpenChat={() => {
-            if (!initialChat) {
-              alert(
-                '채팅할 상대를 먼저 선택한 뒤, 피드/프로필에서 "채팅" 버튼을 눌러 주세요.',
-              );
-              return;
-            }
             setShowChat(true);
+            setHasNewMessages(false);
           }}
           onCreateProfile={handleCreateProfile}
           onProfileClick={handleProfileClick}
@@ -308,11 +303,11 @@ export default function Home() {
       )}
 
       {/* 채팅 시스템 */}
-      {showChat && initialChat && (
+      {showChat && (
         <ChatSystem
           onClose={() => setShowChat(false)}
           currentUser={user}
-          initialChat={initialChat}
+          initialChat={initialChat ?? undefined}
           onNewMessage={handleNewMessage}
         />
       )}

@@ -168,10 +168,10 @@ export default function UserProfileModal({ user, profiles, onClose, onFeedClick,
         setProfilesLoading(true);
         setProfilesError(null);
 
-        // 현재 로그인한 user.id 를 기준으로 profiles_detail 테이블 조회
+        // 현재 로그인한 user.id 를 기준으로 posts 테이블 조회
         // (user_id 컬럼으로 필터링, 최신 순 정렬)
         const { data, error } = await supabase
-          .from('profiles_detail')
+          .from('posts')
           .select('id, user_id, title, description, skills, interests, experience, contact, created_at')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false });
@@ -181,23 +181,27 @@ export default function UserProfileModal({ user, profiles, onClose, onFeedClick,
         }
 
         // 쿼리 결과(raw 데이터)를 화면에서 사용하기 쉬운 Profile 타입으로 변환
-        const mapped: Profile[] = (data ?? []).map((row: any) => ({
-          id: row.id ?? row.user_id ?? user.id,
-          title: row.title ?? '',
-          description: row.description ?? '',
-          category: row.interests?.category ?? '',
-          position: row.interests?.position ?? '',
-          experience: row.experience?.level ?? '',
-          contact: row.contact ?? '',
-          skills: row.skills ?? [],
-          projects: row.projects ?? [],
-          createdAt: row.created_at ?? new Date().toISOString(),
-          author: {
-            name: displayUser.name,
-            department: displayUser.department,
-            year: displayUser.year,
-          },
-        }));
+        const mapped: Profile[] = (data ?? []).map((row: any) => {
+          const interests = row.interests || {};
+          const experience = row.experience || {};
+          return {
+            id: row.id,
+            title: row.title ?? '',
+            description: row.description ?? '',
+            category: interests.category ?? '',
+            position: interests.position ?? '',
+            experience: experience.level ?? '',
+            contact: row.contact ?? '',
+            skills: Array.isArray(row.skills) ? row.skills : [],
+            projects: row.projects ?? [],
+            createdAt: row.created_at ?? new Date().toISOString(),
+            author: {
+              name: displayUser.name,
+              department: displayUser.department,
+              year: displayUser.year,
+            },
+          };
+        });
 
         setMyProfiles(mapped);
       } catch (err) {
@@ -210,7 +214,7 @@ export default function UserProfileModal({ user, profiles, onClose, onFeedClick,
     };
 
     fetchMyProfiles();
-  }, [user.id, user.name, user.department, user.year]);
+  }, [user.id, displayUser.name, displayUser.department, displayUser.year]);
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
@@ -277,7 +281,7 @@ export default function UserProfileModal({ user, profiles, onClose, onFeedClick,
 
             {/* 하단: 내가 작성한 팀원 모집 프로필 카드 목록 */}
             <div>
-              <h3 className="text-lg font-semibold mb-4">내가 작성한 프로필 ({myProfiles.length}개)</h3>
+              <h3 className="text-lg font-semibold mb-4">내가 작성한 프로필</h3>
               
               {profilesLoading ? (
                 <div className="text-center py-12 bg-gray-50 rounded-lg">
