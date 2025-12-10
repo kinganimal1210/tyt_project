@@ -149,7 +149,7 @@ export default function Home() {
   }, [user]);
 
   // 새 메시지 이벤트
-  const handleNewMessage = (_msg: any) => {
+  const handleNewMessage = () => {
     if (!showChat) setHasNewMessages(true);
   };
 
